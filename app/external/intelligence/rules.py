@@ -1,5 +1,5 @@
 from typing import Tuple, Dict, Any, Literal, Union
-from contracts import KarmaInput, BucketRead, EmbodimentOutput
+from .contracts import KarmaInput, BucketRead, EmbodimentOutput
 
 # Configuration constants
 KARMA_SCORE_THRESHOLD = 10

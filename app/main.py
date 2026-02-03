@@ -18,7 +18,7 @@ sys.path.append(ROOT_DIR)
 # -------------------------------------------------
 # Load environment variables
 # -------------------------------------------------
-load_dotenv(dotenv_path=os.path.join(ROOT_DIR, ".env"))
+load_dotenv()  # Load from current directory
 
 # -------------------------------------------------
 # Optional Sentry

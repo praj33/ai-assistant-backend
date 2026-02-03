@@ -6,9 +6,9 @@ Enforces WORM (Write Once Read Many) for audit entries
 
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-from utils.logger import get_logger
+import logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 class AuditMiddleware:
     """Enforce immutable audit trail for all Bucket operations"""

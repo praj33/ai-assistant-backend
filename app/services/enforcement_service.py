@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from datetime import datetime
-from app.external.enforcement.enforcement_engine import EnforcementEngine
+from app.external.enforcement.simple_engine import EnforcementEngine
 
 class EnforcementService:
     def __init__(self):

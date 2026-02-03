@@ -2,10 +2,10 @@ import datetime
 import uuid
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from contracts import (
+from .contracts import (
     EmbodimentOutput, KarmaInput, BucketRead, BucketWrite, OutputConstraints
 )
-from rules import map_karma_to_risk, select_behavior_profile
+from .rules import map_karma_to_risk, select_behavior_profile
 
 class IntelligenceCore:
     def __init__(self):

@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 from typing import List, Dict, Optional
 import datetime
 import time
-from utils.logger import get_logger
+import logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
