@@ -1,45 +1,23 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
 
-# Ensure data directory exists for SQLite
-DATABASE_DIR = "data"
-os.makedirs(DATABASE_DIR, exist_ok=True)
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+DATABASE_NAME = os.getenv("DATABASE_NAME", "ai_assistant")
 
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(DATABASE_DIR, 'tasks.db')}")
+client = AsyncIOMotorClient(MONGODB_URI)
+db = client[DATABASE_NAME]
 
-# Disable echo in production for performance
-echo = os.getenv("ENV") != "production"
-engine = create_engine(DATABASE_URL, echo=echo, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Collections
+tasks_collection = db["tasks"]
+audit_collection = db["audit_logs"]
 
-Base = declarative_base()
-
-class Task(Base):
-    __tablename__ = "tasks"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    description = Column(Text, nullable=False)
-    status = Column(String(50), default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db():
+    return db
 
 async def create_tables():
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception as e:
-        # Log error but don't fail startup if database is read-only
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error creating database tables: {e}")
-        # Re-raise to ensure we know about the issue
-        raise
+    # MongoDB creates collections automatically
+    # Create indexes for performance
+    await tasks_collection.create_index("created_at")
+    await audit_collection.create_index("trace_id")
+    await audit_collection.create_index("timestamp")

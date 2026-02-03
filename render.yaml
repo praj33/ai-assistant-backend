@@ -2,26 +2,29 @@ services:
   - type: web
     name: ai-assistant-backend
     env: python
+    runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: API_KEY
-        value: localtest
+        sync: false
       - key: ENVIRONMENT
         value: production
       - key: MONGODB_URI
-        value: mongodb://localhost:27017/ai_assistant
+        sync: false
+      - key: DATABASE_NAME
+        value: ai_assistant
       - key: TWILIO_ACCOUNT_SID
-        value: your_twilio_account_sid
+        sync: false
       - key: TWILIO_AUTH_TOKEN
-        value: your_twilio_auth_token
+        sync: false
       - key: TWILIO_WHATSAPP_NUMBER
-        value: whatsapp:+14155238886
+        sync: false
       - key: EMAIL_USER
-        value: your_email@gmail.com
+        sync: false
       - key: EMAIL_PASSWORD
-        value: your_app_password
+        sync: false
       - key: INSTAGRAM_ACCESS_TOKEN
-        value: your_instagram_token
+        sync: false
       - key: INSTAGRAM_PAGE_ID
-        value: your_page_id
+        sync: false

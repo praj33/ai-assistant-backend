@@ -1,14 +1,6 @@
-import sys
-import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
-
-# Add unified-ai-being intelligence service path
-unified_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'unified-ai-being', 'backend', 'app', 'services')
-if unified_path not in sys.path:
-    sys.path.append(unified_path)
-
-from intelligence_service import IntelligenceCore
+from app.external.intelligence.intelligence_service import IntelligenceCore
 
 class IntelligenceService:
     def __init__(self):

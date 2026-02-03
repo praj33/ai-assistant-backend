@@ -1,29 +1,6 @@
-import sys
-import os
 from typing import Dict, Any, Optional
 from datetime import datetime
-
-# Add AI-Being path for imports
-ai_being_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'AI-Being')
-if ai_being_path not in sys.path:
-    sys.path.append(ai_being_path)
-
-try:
-    from behavior_validator import validate_behavior
-except ImportError:
-    # Fallback if behavior_validator not found
-    def validate_behavior(intent, conversational_output, **kwargs):
-        return {
-            "decision": "allow",
-            "risk_category": "clean",
-            "confidence": 0,
-            "reason_code": "clean_content",
-            "trace_id": kwargs.get("trace_id", "unknown"),
-            "matched_patterns": [],
-            "explanation": "Safety service fallback - no risky patterns detected",
-            "original_output": conversational_output,
-            "safe_output": conversational_output
-        }
+from app.external.safety.behavior_validator import validate_behavior
 
 class SafetyService:
     def __init__(self):
