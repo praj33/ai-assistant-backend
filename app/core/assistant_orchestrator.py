@@ -135,7 +135,18 @@ async def handle_assistant_request(request):
         })
         
         # -------------------------------
-        # STEP 1: SAFETY GATE (Aakansha)
+        # STEP 1: INTELLIGENCE (Sankalp)
+        # -------------------------------
+        logger.info(f"[{trace_id}] Calling Intelligence Service")
+        intelligence_context = {
+            "user_input": text,
+            "platform": request.context.platform if hasattr(request.context, 'platform') else "web",
+            "session_id": request.context.session_id if hasattr(request.context, 'session_id') else None
+        }
+        intelligence_result = call_intelligence_service(intelligence_context, trace_id)
+        
+        # -------------------------------
+        # STEP 2: SAFETY GATE (Aakansha)
         # -------------------------------
         logger.info(f"[{trace_id}] Calling Safety Service")
         safety_result = call_safety_service(text, trace_id)
@@ -153,18 +164,6 @@ async def handle_assistant_request(request):
                 safety=safety_result,
                 trace_id=trace_id
             )
-        
-        # -------------------------------
-        # STEP 2: INTELLIGENCE (Sankalp)
-        # -------------------------------
-        logger.info(f"[{trace_id}] Calling Intelligence Service")
-        intelligence_context = {
-            "user_input": text,
-            "safety_result": safety_result,
-            "platform": request.context.platform if hasattr(request.context, 'platform') else "web",
-            "session_id": request.context.session_id if hasattr(request.context, 'session_id') else None
-        }
-        intelligence_result = call_intelligence_service(intelligence_context, trace_id)
         
         # -------------------------------
         # STEP 3: ENFORCEMENT (Raj)
