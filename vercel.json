@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "name": "ai-assistant-backend",
+  "builds": [
+    {
+      "src": "app/main.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "app/main.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "app/main.py"
+    }
+  ],
+  "env": {
+    "PYTHONPATH": ".",
+    "ENVIRONMENT": "production"
+  },
+  "functions": {
+    "app/main.py": {
+      "maxDuration": 30
+    }
+  }
+}

@@ -1,0 +1,45 @@
+# Virtual environment
+venv/
+venv310/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Database
+*.db
+*.sqlite3
+
+# Node modules if any
+node_modules/
+
+# Build files
+build/
+dist/
+*.egg-info/

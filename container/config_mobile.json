@@ -1,0 +1,13 @@
+{
+  "platform": "mobile",
+  "api_base_url": "http://localhost:8000",
+  "features": {
+    "voice": true,
+    "offline": true,
+    "push_notifications": true
+  },
+  "limits": {
+    "max_request_size": "10MB",
+    "rate_limit": "100/min"
+  }
+}
