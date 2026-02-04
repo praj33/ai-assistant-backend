@@ -18,6 +18,8 @@ class EmailExecutor:
         self.email_user = os.getenv("EMAIL_USER")
         self.email_password = os.getenv("EMAIL_PASSWORD")
         self.gmail_token = os.getenv("GMAIL_ACCESS_TOKEN")
+        self.sendgrid_key = os.getenv("SENDGRID_API_KEY")
+        self.sendgrid_from = os.getenv("SENDGRID_FROM_EMAIL", self.email_user)
         
     def send_email_smtp(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
         """Send email via SMTP"""
@@ -64,6 +66,50 @@ class EmailExecutor:
                 "trace_id": trace_id,
                 "timestamp": datetime.utcnow().isoformat()
             }
+    
+    def send_email_sendgrid(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+        """Send email via SendGrid API"""
+        try:
+            if not self.sendgrid_key:
+                return self.send_email_smtp(to_email, subject, message, trace_id)
+            
+            headers = {
+                'Authorization': f'Bearer {self.sendgrid_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            data = {
+                'personalizations': [{'to': [{'email': to_email}]}],
+                'from': {'email': self.sendgrid_from},
+                'subject': subject,
+                'content': [{'type': 'text/plain', 'value': message}]
+            }
+            
+            response = requests.post(
+                'https://api.sendgrid.com/v3/mail/send',
+                headers=headers,
+                json=data,
+                timeout=30
+            )
+            
+            if response.status_code == 202:
+                return {
+                    "status": "success",
+                    "to": to_email,
+                    "subject": subject,
+                    "message": message,
+                    "method": "sendgrid",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "email"
+                }
+            else:
+                logger.error(f"SendGrid API error: {response.status_code} - {response.text}")
+                return self.send_email_smtp(to_email, subject, message, trace_id)
+                
+        except Exception as e:
+            logger.error(f"SendGrid execution failed, falling back to SMTP: {e}")
+            return self.send_email_smtp(to_email, subject, message, trace_id)
     
     def send_email_gmail_api(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
         """Send email via Gmail API"""
@@ -113,5 +159,13 @@ class EmailExecutor:
             return self.send_email_smtp(to_email, subject, message, trace_id)
     
     def send_message(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
-        """Main send method - tries Gmail API first, falls back to SMTP"""
-        return self.send_email_gmail_api(to_email, subject, message, trace_id)
+        """Main send method - tries SendGrid first, then Gmail API, then SMTP"""
+        # Try SendGrid first (works on Render.com)
+        if self.sendgrid_key:
+            return self.send_email_sendgrid(to_email, subject, message, trace_id)
+        # Try Gmail API
+        elif self.gmail_token:
+            return self.send_email_gmail_api(to_email, subject, message, trace_id)
+        # Fall back to SMTP
+        else:
+            return self.send_email_smtp(to_email, subject, message, trace_id)
