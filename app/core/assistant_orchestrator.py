@@ -10,7 +10,7 @@ from app.core.intentflow import intent_flow
 from app.core.taskflow import task_flow
 from app.core.decision_hub import decision_hub
 from app.core.logging import get_logger
-from app.core.database import get_db, Task
+from app.core.database import get_db
 
 # Import integrated services
 from app.services.safety_service import SafetyService
