@@ -115,6 +115,8 @@ class PatternLibrary:
             (r'\bhow to hack into.*bank account\b', 91, "Bank hacking request"),
             (r'\bmurder.*plot\b', 97, "Murder planning"),
             (r'\bkill.*someone\b', 96, "Homicidal intent"),
+            (r'\bhurt.*someone\b', 94, "Violence intent"),
+            (r'\bharm.*someone\b', 93, "Harm intent"),
             (r'\bharm.*self\b', 95, "Self-harm intent"),
             (r'\bsuicide.*method\b', 99, "Suicide method"),
             (r'\bexplosive.*device\b', 94, "Explosive device"),

@@ -229,95 +229,72 @@ async def handle_assistant_request(request):
             # Use safe rewritten response
             response_text = safety_result.get("safe_output", "I understand. Let me help you with that in a different way.")
             result_type = "passive"
+        elif intent.get("intent") == "email" or "email" in text.lower():
+            # Email execution path
+            result_type = "workflow"
+            action_data = extract_action_parameters(text, "email")
+            
+            if action_data:
+                logger.info(f"[{trace_id}] Executing email action")
+                execution_result = execution_service.execute_action(
+                    action_type="email",
+                    action_data=action_data,
+                    trace_id=trace_id,
+                    enforcement_decision=enforcement_result.get("decision", "ALLOW")
+                )
+                log_to_bucket(trace_id, "action_execution", execution_result)
+                
+                if execution_result.get("status") == "success":
+                    response_text = "Successfully sent email message."
+                    task = {"task_type": "email", "status": "completed", "execution": execution_result}
+                elif execution_result.get("status") == "error":
+                    response_text = f"Failed to send email: {execution_result.get('error')}"
+                    task = {"task_type": "email", "status": "failed", "error": execution_result.get('error')}
+                else:
+                    response_text = "Email action processed."
+                    task = {"task_type": "email", "status": "processed"}
+            else:
+                response_text = "Could not extract email parameters from request."
+                task = {"task_type": "email", "status": "failed", "error": "missing_parameters"}
+                result_type = "passive"
+        elif "whatsapp" in text.lower() or "send message" in text.lower():
+            # WhatsApp execution path
+            result_type = "workflow"
+            action_data = extract_action_parameters(text, "whatsapp")
+            
+            if action_data:
+                logger.info(f"[{trace_id}] Executing WhatsApp action")
+                execution_result = execution_service.execute_action(
+                    action_type="whatsapp",
+                    action_data=action_data,
+                    trace_id=trace_id,
+                    enforcement_decision=enforcement_result.get("decision", "ALLOW")
+                )
+                log_to_bucket(trace_id, "action_execution", execution_result)
+                
+                if execution_result.get("status") == "success":
+                    response_text = "Successfully sent WhatsApp message."
+                    task = {"task_type": "whatsapp", "status": "completed", "execution": execution_result}
+                elif execution_result.get("status") == "error":
+                    response_text = f"Failed to send WhatsApp: {execution_result.get('error')}"
+                    task = {"task_type": "whatsapp", "status": "failed", "error": execution_result.get('error')}
+                else:
+                    response_text = "WhatsApp action processed."
+                    task = {"task_type": "whatsapp", "status": "processed"}
+            else:
+                response_text = "Could not extract WhatsApp parameters from request."
+                task = {"task_type": "whatsapp", "status": "failed", "error": "missing_parameters"}
+                result_type = "passive"
         elif intent.get("intent") == "general":
             # Generate normal response
             response_text = decision_hub.simple_response(processed_text)
             result_type = "passive"
         else:
-            # Task/workflow path with potential execution
+            # Task/workflow path
             try:
                 task = task_flow.build_task(intent)
-                task_type = task.get("task_type") if task else "general_task"
                 response_text = "Task processed successfully"
                 result_type = "workflow"
-                
-                # Check if task requires execution (WhatsApp/Email)
-                if task and task.get("task_type") in ["email", "whatsapp"]:
-                    action_type = task.get("task_type")
-                    
-                    # Extract action parameters from original text
-                    action_data = extract_action_parameters(text, action_type)
-                    
-                    if action_data:
-                        logger.info(f"[{trace_id}] Executing {action_type} action")
-                        execution_result = execution_service.execute_action(
-                            action_type=action_type,
-                            action_data=action_data,
-                            trace_id=trace_id,
-                            enforcement_decision=enforcement_result.get("decision", "ALLOW")
-                        )
-                        log_to_bucket(trace_id, "action_execution", execution_result)
-                        
-                        # Update response based on execution result
-                        if execution_result.get("status") == "success":
-                            response_text = f"Successfully sent {action_type} message."
-                        elif execution_result.get("status") == "error":
-                            if "credentials not configured" in execution_result.get("error", ""):
-                                response_text = f"Demo: {action_type.title()} message would be sent (credentials not configured)."
-                            else:
-                                response_text = f"Failed to execute {action_type} action: {execution_result.get('error')}"
-                        elif execution_result.get("status") == "blocked":
-                            response_text = "Action was blocked by enforcement policy."
-                        else:
-                            response_text = f"Demo: {action_type.title()} message processed."
-                    else:
-                        response_text = f"Could not extract {action_type} parameters from request."
-                
-                # Direct email/whatsapp detection bypass
-                elif "email" in text.lower() or "mailto:" in text.lower():
-                    action_data = extract_action_parameters(text, "email")
-                    if action_data:
-                        logger.info(f"[{trace_id}] Direct email execution detected")
-                        execution_result = execution_service.execute_action(
-                            action_type="email",
-                            action_data=action_data,
-                            trace_id=trace_id,
-                            enforcement_decision=enforcement_result.get("decision", "ALLOW")
-                        )
-                        log_to_bucket(trace_id, "action_execution", execution_result)
-                        
-                        if execution_result.get("status") == "success":
-                            response_text = "Successfully sent email message."
-                        elif execution_result.get("status") == "error":
-                            if "credentials not configured" in execution_result.get("error", ""):
-                                response_text = "Demo: Email message would be sent (credentials not configured)."
-                            else:
-                                response_text = f"Failed to execute email action: {execution_result.get('error')}"
-                        else:
-                            response_text = "Demo: Email message processed."
-                
-                elif "whatsapp" in text.lower() or "send message" in text.lower():
-                    action_data = extract_action_parameters(text, "whatsapp")
-                    if action_data:
-                        logger.info(f"[{trace_id}] Direct WhatsApp execution detected")
-                        execution_result = execution_service.execute_action(
-                            action_type="whatsapp",
-                            action_data=action_data,
-                            trace_id=trace_id,
-                            enforcement_decision=enforcement_result.get("decision", "ALLOW")
-                        )
-                        log_to_bucket(trace_id, "action_execution", execution_result)
-                        
-                        if execution_result.get("status") == "success":
-                            response_text = "Successfully sent WhatsApp message."
-                        elif execution_result.get("status") == "error":
-                            if "credentials not configured" in execution_result.get("error", ""):
-                                response_text = "Demo: WhatsApp message would be sent (credentials not configured)."
-                            else:
-                                response_text = f"Failed to execute WhatsApp action: {execution_result.get('error')}"
-                        else:
-                            response_text = "Demo: WhatsApp message processed."
-                            
             except Exception as e:
                 logger.warning(f"[{trace_id}] Task building failed: {e}. Using default response.")
                 response_text = decision_hub.simple_response(processed_text)

@@ -1,0 +1,41 @@
+{
+  "version": "3.0.0",
+  "status": "success",
+  "result": {
+    "type": "workflow",
+    "response": "Successfully sent WhatsApp message.",
+    "task": {
+      "task_type": "whatsapp",
+      "status": "completed",
+      "execution": {
+        "status": "success",
+        "message_sid": "SM12caab10028cf64518eab0ea6b10564e",
+        "to": "whatsapp:+919136919017",
+        "message": "This is a live demo of WhatsApp execution from AI Assistant!",
+        "trace_id": "trace_3a2c8e4a243d",
+        "timestamp": "2026-02-04T08:49:38.745954",
+        "platform": "whatsapp"
+      }
+    },
+    "enforcement": {
+      "decision": "ALLOW",
+      "scope": "both",
+      "trace_id": "trace_3a2c8e4a243d",
+      "reason_code": "CONTENT_ALLOWED",
+      "timestamp": "2026-02-04T08:49:38.411831"
+    },
+    "safety": {
+      "decision": "allow",
+      "risk_category": "clean",
+      "confidence": 0.0,
+      "reason_code": "clean_content",
+      "trace_id": "trace_3a2c8e4a243d",
+      "matched_patterns": [],
+      "explanation": "No risky patterns detected",
+      "original_output": "Send WhatsApp to +919136919017 saying 'This is a live demo of WhatsApp execution from AI Assistant!'",
+      "safe_output": "Send WhatsApp to +919136919017 saying 'This is a live demo of WhatsApp execution from AI Assistant!'",
+      "timestamp": "2026-02-04T08:49:38.411831"
+    }
+  },
+  "processed_at": "2026-02-04T08:49:38.747457Z"
+}

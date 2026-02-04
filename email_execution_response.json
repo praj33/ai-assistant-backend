@@ -1,0 +1,42 @@
+{
+  "version": "3.0.0",
+  "status": "success",
+  "result": {
+    "type": "workflow",
+    "response": "Successfully sent email message.",
+    "task": {
+      "task_type": "email",
+      "status": "completed",
+      "execution": {
+        "status": "success",
+        "to": "rajprajapati8286@gmail.com",
+        "subject": "AI Assistant Demo",
+        "message": "This is a live demo of real email execution from AI Assistant!",
+        "method": "smtp",
+        "trace_id": "trace_5cf6a59bc05c",
+        "timestamp": "2026-02-04T08:21:28.970158",
+        "platform": "email"
+      }
+    },
+    "enforcement": {
+      "decision": "ALLOW",
+      "scope": "both",
+      "trace_id": "trace_5cf6a59bc05c",
+      "reason_code": "CONTENT_ALLOWED",
+      "timestamp": "2026-02-04T08:21:25.534131"
+    },
+    "safety": {
+      "decision": "allow",
+      "risk_category": "clean",
+      "confidence": 0.0,
+      "reason_code": "clean_content",
+      "trace_id": "trace_5cf6a59bc05c",
+      "matched_patterns": [],
+      "explanation": "No risky patterns detected",
+      "original_output": "Send an email to rajprajapati8286@gmail.com with subject 'AI Assistant Demo' saying 'This is a live demo of real email execution from AI Assistant!'",
+      "safe_output": "Send an email to rajprajapati8286@gmail.com with subject 'AI Assistant Demo' saying 'This is a live demo of real email execution from AI Assistant!'",
+      "timestamp": "2026-02-04T08:21:25.533125"
+    }
+  },
+  "processed_at": "2026-02-04T08:21:28.970158Z"
+}

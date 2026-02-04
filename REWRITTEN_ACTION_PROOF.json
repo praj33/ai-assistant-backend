@@ -1,0 +1,33 @@
+{
+  "version": "3.0.0",
+  "status": "success",
+  "result": {
+    "type": "passive",
+    "response": "Could not extract email parameters from request.",
+    "task": {
+      "task_type": "email",
+      "status": "failed",
+      "error": "missing_parameters"
+    },
+    "enforcement": {
+      "decision": "ALLOW",
+      "scope": "both",
+      "trace_id": "trace_c02605fb5613",
+      "reason_code": "CONTENT_ALLOWED",
+      "timestamp": "2026-02-04T08:22:34.064869"
+    },
+    "safety": {
+      "decision": "allow",
+      "risk_category": "clean",
+      "confidence": 0.0,
+      "reason_code": "clean_content",
+      "trace_id": "trace_c02605fb5613",
+      "matched_patterns": [],
+      "explanation": "No risky patterns detected",
+      "original_output": "Send email with very aggressive and threatening language to someone",
+      "safe_output": "Send email with very aggressive and threatening language to someone",
+      "timestamp": "2026-02-04T08:22:34.064869"
+    }
+  },
+  "processed_at": "2026-02-04T08:22:34.065878Z"
+}

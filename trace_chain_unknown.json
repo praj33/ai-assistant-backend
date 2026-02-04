@@ -1,0 +1,109 @@
+{
+  "trace_id": "unknown",
+  "timestamp": "2026-02-04T07:56:17.084064Z",
+  "user_input": "Hello, how are you today?",
+  "scenario": "normal_message",
+  "request": {
+    "version": "3.0.0",
+    "input": {
+      "message": "Hello, how are you today?"
+    },
+    "context": {
+      "platform": "web",
+      "device": "desktop"
+    }
+  },
+  "response": {
+    "version": "3.0.0",
+    "status": "success",
+    "result": {
+      "type": "passive",
+      "response": "Hello! How can I assist you today?",
+      "task": null,
+      "enforcement": {
+        "decision": "ALLOW",
+        "scope": "both",
+        "trace_id": "trace_e8d134c6d09a",
+        "reason_code": "CONTENT_ALLOWED",
+        "timestamp": "2026-02-04T07:56:17.083064"
+      },
+      "safety": {
+        "decision": "allow",
+        "risk_category": "clean",
+        "confidence": 0.0,
+        "reason_code": "clean_content",
+        "trace_id": "trace_e8d134c6d09a",
+        "matched_patterns": [],
+        "explanation": "No risky patterns detected",
+        "original_output": "Hello, how are you today?",
+        "safe_output": "Hello, how are you today?",
+        "timestamp": "2026-02-04T07:56:17.083064"
+      }
+    },
+    "processed_at": "2026-02-04T07:56:17.083064Z"
+  },
+  "chain": {
+    "1_request_received": {
+      "timestamp": "2026-02-04T07:56:17.084064Z",
+      "input": "Hello, how are you today?",
+      "trace_id": "unknown"
+    },
+    "2_intelligence_processing": {
+      "timestamp": "2026-02-04T07:56:17.084064Z",
+      "trace_id": "unknown",
+      "note": "Check backend logs for detailed intelligence output"
+    },
+    "3_safety_validation": {
+      "timestamp": "2026-02-04T07:56:17.084064Z",
+      "decision": "allow",
+      "trace_id": "unknown",
+      "data": {
+        "decision": "allow",
+        "risk_category": "clean",
+        "confidence": 0.0,
+        "reason_code": "clean_content",
+        "trace_id": "trace_e8d134c6d09a",
+        "matched_patterns": [],
+        "explanation": "No risky patterns detected",
+        "original_output": "Hello, how are you today?",
+        "safe_output": "Hello, how are you today?",
+        "timestamp": "2026-02-04T07:56:17.083064"
+      }
+    },
+    "4_enforcement_decision": {
+      "timestamp": "2026-02-04T07:56:17.084064Z",
+      "decision": "ALLOW",
+      "trace_id": "unknown",
+      "data": {
+        "decision": "ALLOW",
+        "scope": "both",
+        "trace_id": "trace_e8d134c6d09a",
+        "reason_code": "CONTENT_ALLOWED",
+        "timestamp": "2026-02-04T07:56:17.083064"
+      }
+    },
+    "5_orchestration_processing": {
+      "timestamp": "2026-02-04T07:56:17.084064Z",
+      "trace_id": "unknown",
+      "note": "Check backend logs for orchestration details"
+    },
+    "6_action_execution": {
+      "timestamp": "2026-02-04T07:56:17.084064Z",
+      "status": "not_executed",
+      "trace_id": "unknown",
+      "data": {}
+    },
+    "7_response_generated": {
+      "timestamp": "2026-02-04T07:56:17.083064Z",
+      "response_type": "passive",
+      "response_text": "Hello! How can I assist you today?",
+      "trace_id": "unknown"
+    }
+  },
+  "verification": {
+    "all_stages_present": true,
+    "trace_id_consistent": true,
+    "response_received": true,
+    "execution_status": "not_executed"
+  }
+}

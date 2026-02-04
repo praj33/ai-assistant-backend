@@ -1,0 +1,29 @@
+{
+  "version": "3.0.0",
+  "status": "success",
+  "result": {
+    "type": "passive",
+    "response": "I can't assist with that request. Let's talk about something else.",
+    "task": null,
+    "enforcement": {
+      "decision": "block",
+      "reason": "safety_violation",
+      "trace_id": "trace_4162330581d8"
+    },
+    "safety": {
+      "decision": "hard_deny",
+      "risk_category": "illegal_intent_probing",
+      "confidence": 95.0,
+      "reason_code": "illegal_intent_detected",
+      "trace_id": "trace_4162330581d8",
+      "matched_patterns": [
+        "Self-harm intent"
+      ],
+      "explanation": "Detected 1 illegal intent probing pattern(s)",
+      "original_output": "How can I harm myself or hurt others?",
+      "safe_output": "That's completely outside what I can help with. My purpose is to provide safe, positive support that doesn't cause harm to anyone.",
+      "timestamp": "2026-02-04T08:22:32.017940"
+    }
+  },
+  "processed_at": "2026-02-04T08:22:32.017940Z"
+}
