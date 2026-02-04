@@ -10,6 +10,7 @@ from app.core.intentflow import intent_flow
 from app.core.taskflow import task_flow
 from app.core.decision_hub import decision_hub
 from app.core.logging import get_logger
+from app.core.database import get_db, Task
 
 # Import integrated services
 from app.services.safety_service import SafetyService
@@ -60,6 +61,25 @@ def extract_action_parameters(text: str, action_type: str) -> Dict[str, Any]:
             }
     
     return None
+
+async def save_task_to_db(task_data: Dict[str, Any], trace_id: str) -> Optional[int]:
+    """Save task to database"""
+    try:
+        from app.core.database import async_session_maker
+        
+        async with async_session_maker() as db:
+            task = Task(
+                description=f"{task_data.get('task_type', 'general')}: {task_data.get('parameters', {})}",
+                status=task_data.get('status', 'pending')
+            )
+            db.add(task)
+            await db.commit()
+            await db.refresh(task)
+            logger.info(f"[{trace_id}] Task saved to DB with ID: {task.id}")
+            return task.id
+    except Exception as e:
+        logger.warning(f"[{trace_id}] Failed to save task to DB: {e}")
+        return None
 
 def log_to_bucket(trace_id: str, stage: str, data: Dict[str, Any]):
     """Log data to bucket with trace ID"""
@@ -247,6 +267,10 @@ async def handle_assistant_request(request):
                 if execution_result.get("status") == "success":
                     response_text = "Successfully sent email message."
                     task = {"task_type": "email", "status": "completed", "execution": execution_result}
+                    # Save task to database
+                    task_id = await save_task_to_db(task, trace_id)
+                    if task_id:
+                        task["id"] = task_id
                 elif execution_result.get("status") == "error":
                     response_text = f"Failed to send email: {execution_result.get('error')}"
                     task = {"task_type": "email", "status": "failed", "error": execution_result.get('error')}
@@ -275,6 +299,10 @@ async def handle_assistant_request(request):
                 if execution_result.get("status") == "success":
                     response_text = "Successfully sent WhatsApp message."
                     task = {"task_type": "whatsapp", "status": "completed", "execution": execution_result}
+                    # Save task to database
+                    task_id = await save_task_to_db(task, trace_id)
+                    if task_id:
+                        task["id"] = task_id
                 elif execution_result.get("status") == "error":
                     response_text = f"Failed to send WhatsApp: {execution_result.get('error')}"
                     task = {"task_type": "whatsapp", "status": "failed", "error": execution_result.get('error')}
