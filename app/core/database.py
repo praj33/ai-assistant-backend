@@ -19,5 +19,6 @@ async def create_tables():
     # MongoDB creates collections automatically
     # Create indexes for performance
     await tasks_collection.create_index("created_at")
+    await tasks_collection.create_index("trace_id", unique=True)  # Add trace_id index
     await audit_collection.create_index("trace_id")
     await audit_collection.create_index("timestamp")

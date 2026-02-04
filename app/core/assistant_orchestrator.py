@@ -62,21 +62,23 @@ def extract_action_parameters(text: str, action_type: str) -> Dict[str, Any]:
     
     return None
 
-async def save_task_to_db(task_data: Dict[str, Any], trace_id: str) -> Optional[int]:
-    """Save task to database"""
+async def save_task_to_db(task_data: Dict[str, Any], trace_id: str) -> Optional[str]:
+    """Save task to database with trace_id"""
     try:
-        from app.core.database import async_session_maker
+        from app.core.database import tasks_collection
         
-        async with async_session_maker() as db:
-            task = Task(
-                description=f"{task_data.get('task_type', 'general')}: {task_data.get('parameters', {})}",
-                status=task_data.get('status', 'pending')
-            )
-            db.add(task)
-            await db.commit()
-            await db.refresh(task)
-            logger.info(f"[{trace_id}] Task saved to DB with ID: {task.id}")
-            return task.id
+        task_doc = {
+            "trace_id": trace_id,
+            "task_type": task_data.get('task_type', 'general'),
+            "status": task_data.get('status', 'completed'),
+            "execution": task_data.get('execution', {}),
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        result = await tasks_collection.insert_one(task_doc)
+        logger.info(f"[{trace_id}] Task saved to DB")
+        return trace_id
     except Exception as e:
         logger.warning(f"[{trace_id}] Failed to save task to DB: {e}")
         return None
@@ -268,9 +270,9 @@ async def handle_assistant_request(request):
                     response_text = "Successfully sent email message."
                     task = {"task_type": "email", "status": "completed", "execution": execution_result}
                     # Save task to database
-                    task_id = await save_task_to_db(task, trace_id)
-                    if task_id:
-                        task["id"] = task_id
+                    saved_trace_id = await save_task_to_db(task, trace_id)
+                    if saved_trace_id:
+                        task["trace_id"] = saved_trace_id
                 elif execution_result.get("status") == "error":
                     response_text = f"Failed to send email: {execution_result.get('error')}"
                     task = {"task_type": "email", "status": "failed", "error": execution_result.get('error')}
@@ -300,9 +302,9 @@ async def handle_assistant_request(request):
                     response_text = "Successfully sent WhatsApp message."
                     task = {"task_type": "whatsapp", "status": "completed", "execution": execution_result}
                     # Save task to database
-                    task_id = await save_task_to_db(task, trace_id)
-                    if task_id:
-                        task["id"] = task_id
+                    saved_trace_id = await save_task_to_db(task, trace_id)
+                    if saved_trace_id:
+                        task["trace_id"] = saved_trace_id
                 elif execution_result.get("status") == "error":
                     response_text = f"Failed to send WhatsApp: {execution_result.get('error')}"
                     task = {"task_type": "whatsapp", "status": "failed", "error": execution_result.get('error')}
