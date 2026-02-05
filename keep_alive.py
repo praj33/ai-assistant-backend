@@ -16,13 +16,13 @@ def ping_server():
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=10)
         if response.status_code == 200:
-            print(f"[{datetime.now()}] ✓ Server is alive")
+            print(f"[{datetime.now()}] OK Server is alive")
             return True
         else:
-            print(f"[{datetime.now()}] ✗ Server returned {response.status_code}")
+            print(f"[{datetime.now()}] ERROR Server returned {response.status_code}")
             return False
     except Exception as e:
-        print(f"[{datetime.now()}] ✗ Ping failed: {e}")
+        print(f"[{datetime.now()}] ERROR Ping failed: {e}")
         return False
 
 if __name__ == "__main__":
