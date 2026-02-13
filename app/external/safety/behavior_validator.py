@@ -350,8 +350,8 @@ class BehaviorValidator:
                          platform_policy_state: Optional[Dict] = None,
                          karma_bias_input: float = 0.5) -> ValidationResult:
         """Main validation method - automatically detects risk from content"""
-        
-        text = conversational_output.lower()
+
+        text = self._normalize_for_detection(conversational_output)
         detected_category = "clean"
         
         # Check ALL hard deny patterns first (highest priority)
@@ -447,6 +447,14 @@ class BehaviorValidator:
             if re.search(pattern, text, re.IGNORECASE):
                 matches.append((confidence, pattern, description))
         return matches
+
+    def _normalize_for_detection(self, text: str) -> str:
+        """Normalize text for resilient risk detection without changing semantics."""
+        lowered = text.lower()
+        collapsed = re.sub(r"\s+", " ", lowered).strip()
+        # Common evasion variant: "my self" -> "myself"
+        normalized = re.sub(r"\bmy\s+self\b", "myself", collapsed)
+        return normalized
     
     def _generate_trace_id(self, text: str, category: str = "auto") -> str:
         """Generate deterministic trace ID based on input + category + version"""

@@ -21,6 +21,14 @@ from app.services.execution_service import ExecutionService
 
 logger = get_logger(__name__)
 
+CRISIS_SAFE_RESPONSE = (
+    "I'm really glad you shared this. I can't help with harming yourself, "
+    "but I want you to have immediate support right now. "
+    "If you're in immediate danger, call emergency services now. "
+    "In the U.S. and Canada, call or text 988 for the Suicide & Crisis Lifeline. "
+    "If you're elsewhere, contact your local emergency number or nearest crisis line."
+)
+
 # Initialize services
 safety_service = SafetyService()
 intelligence_service = IntelligenceService()
@@ -181,8 +189,8 @@ async def handle_assistant_request(request):
             })
             return success_response(
                 result_type="passive",
-                response_text="I can't assist with that request. Let's talk about something else.",
-                enforcement={"decision": "block", "reason": "safety_violation", "trace_id": trace_id},
+                response_text=CRISIS_SAFE_RESPONSE,
+                enforcement={"decision": "BLOCK", "reason": "safety_hard_deny", "trace_id": trace_id},
                 safety=safety_result,
                 trace_id=trace_id
             )
@@ -208,7 +216,7 @@ async def handle_assistant_request(request):
             })
             return success_response(
                 result_type="passive",
-                response_text="Action blocked by enforcement policy.",
+                response_text=CRISIS_SAFE_RESPONSE,
                 enforcement=enforcement_result,
                 safety=safety_result,
                 trace_id=trace_id

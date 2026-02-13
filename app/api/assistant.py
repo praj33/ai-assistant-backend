@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 from datetime import datetime
 import os
 
@@ -127,7 +127,7 @@ async def assistant_options(request: Request):
 
 @router.post(
     "/api/assistant",
-    response_model=AssistantSuccessResponse | AssistantErrorResponse
+    response_model=Union[AssistantSuccessResponse, AssistantErrorResponse]
 )
 async def assistant_endpoint(
     request: AssistantRequest,
