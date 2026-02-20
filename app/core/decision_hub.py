@@ -53,7 +53,7 @@ class DecisionHub:
             base_url = os.getenv("BASE_URL", "http://localhost:8000")
             async with httpx.AsyncClient() as client:
                 files = {"file": ("audio.wav", BytesIO(audio_data), content_type)}
-                headers = {"X-API-Key": os.getenv("API_KEY", "localtest")}
+                headers = {"X-API-Key": os.getenv("API_KEY", "")}
                 response = await client.post(f"{base_url}/api/voice_stt", files=files, headers=headers)
                 response.raise_for_status()
                 return response.json()
@@ -68,7 +68,7 @@ class DecisionHub:
             base_url = os.getenv("BASE_URL", "http://localhost:8000")
             async with httpx.AsyncClient() as client:
                 payload = {"text": text, "voice": voice, "model": model}
-                headers = {"X-API-Key": os.getenv("API_KEY", "localtest")}
+                headers = {"X-API-Key": os.getenv("API_KEY", "")}
                 response = await client.post(f"{base_url}/api/voice_tts", json=payload, headers=headers)
                 response.raise_for_status()
                 return response.json()
@@ -83,7 +83,7 @@ class DecisionHub:
             base_url = os.getenv("BASE_URL", "http://localhost:8000")
             async with httpx.AsyncClient() as client:
                 payload = {"description": description}
-                headers = {"X-API-Key": os.getenv("API_KEY", "localtest")}
+                headers = {"X-API-Key": os.getenv("API_KEY", "")}
                 response = await client.post(f"{base_url}/api/tasks", json=payload, headers=headers)
                 response.raise_for_status()
                 return response.json()
@@ -97,7 +97,7 @@ class DecisionHub:
         try:
             base_url = os.getenv("BASE_URL", "http://localhost:8000")
             async with httpx.AsyncClient() as client:
-                headers = {"X-API-Key": os.getenv("API_KEY", "localtest")}
+                headers = {"X-API-Key": os.getenv("API_KEY", "")}
                 if intent == "summarize":
                     payload = {"text": query, "model": model}
                     response = await client.post(f"{base_url}/api/summarize", json=payload, headers=headers)
@@ -238,7 +238,7 @@ class DecisionHub:
         base_url = os.getenv("BASE_URL", "http://localhost:8000")
         async with httpx.AsyncClient() as client:
             try:
-                headers = {"X-API-Key": os.getenv("API_KEY", "localtest")}
+                headers = {"X-API-Key": os.getenv("API_KEY", "")}
                 response = await client.post(f"{base_url}/api/task", json=intent_data, headers=headers)
                 response.raise_for_status()
                 return response.json()
@@ -251,7 +251,7 @@ class DecisionHub:
         base_url = os.getenv("BASE_URL", "http://localhost:8000")
         async with httpx.AsyncClient() as client:
             try:
-                headers = {"X-API-Key": os.getenv("API_KEY", "localtest")}
+                headers = {"X-API-Key": os.getenv("API_KEY", "")}
                 response = await client.post(f"{base_url}/api/intent", json={"text": text}, headers=headers)
                 response.raise_for_status()
                 data = response.json()

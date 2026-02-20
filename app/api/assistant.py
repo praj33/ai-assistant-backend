@@ -92,17 +92,15 @@ async def assistant_options(request: Request):
     
     origin = request.headers.get("origin", "")
     
-    # Check if origin is allowed (including Render.com subdomains)
+    # Check if origin is allowed (only ai-assistant Render.com subdomains)
     is_allowed = False
     if origin:
+        import re
         # Check explicit list
         if origin in allowed_origins:
             is_allowed = True
-        # Allow Render.com subdomains
-        elif origin.endswith(".onrender.com") and origin.startswith("https://"):
-            is_allowed = True
-        # Allow ai-assistant Render.com subdomains
-        elif "ai-assistant" in origin and origin.endswith(".onrender.com"):
+        # Allow only ai-assistant Render.com subdomains
+        elif re.match(r"https://ai-assistant[-\w]*\.onrender\.com$", origin):
             is_allowed = True
     
     # Determine allowed origin

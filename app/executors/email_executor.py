@@ -1,4 +1,5 @@
 import os
+import re
 import smtplib
 import requests
 from email.mime.text import MIMEText
@@ -10,6 +11,10 @@ import base64
 import json
 
 logger = logging.getLogger(__name__)
+
+EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+MAX_SUBJECT_LENGTH = 998  # RFC 2822
+MAX_MESSAGE_LENGTH = 50000
 
 class EmailExecutor:
     def __init__(self):
@@ -162,7 +167,8 @@ class EmailExecutor:
             response = requests.post(
                 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
                 headers=headers,
-                json=data
+                json=data,
+                timeout=30
             )
             
             if response.status_code == 200:
@@ -185,8 +191,38 @@ class EmailExecutor:
             logger.error(f"Gmail API execution failed, falling back to SMTP: {e}")
             return self.send_email_smtp(to_email, subject, message, trace_id)
     
+    def _validate_inputs(self, to_email: str, subject: str, message: str, trace_id: str) -> Optional[Dict[str, Any]]:
+        """Validate email inputs, return error dict if invalid, None if valid."""
+        if not to_email or not EMAIL_REGEX.match(to_email):
+            return {
+                "status": "error",
+                "error": f"Invalid email address: {to_email}",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        if subject and len(subject) > MAX_SUBJECT_LENGTH:
+            return {
+                "status": "error",
+                "error": f"Subject exceeds maximum length of {MAX_SUBJECT_LENGTH} characters",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        if message and len(message) > MAX_MESSAGE_LENGTH:
+            return {
+                "status": "error",
+                "error": f"Message exceeds maximum length of {MAX_MESSAGE_LENGTH} characters",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        return None
+
     def send_message(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
         """Main send method - tries SendGrid first, then Gmail API, then SMTP"""
+        # Validate inputs before sending
+        validation_error = self._validate_inputs(to_email, subject, message, trace_id)
+        if validation_error:
+            return validation_error
+
         # Try SendGrid first (works on Render.com)
         if self.sendgrid_key:
             return self.send_email_sendgrid(to_email, subject, message, trace_id)
