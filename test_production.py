@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 
@@ -5,7 +6,12 @@ print("=" * 70)
 print("Production Test - Email & WhatsApp on Render")
 print("=" * 70)
 
-BACKEND_URL = "https://ai-assistant-backend-70rt.onrender.com"
+BACKEND_URL = os.getenv("BACKEND_URL", "https://ai-assistant-backend-70rt.onrender.com")
+API_KEY = os.getenv("API_KEY")
+if not API_KEY:
+    print("ERROR: API_KEY environment variable must be set to run production tests.")
+    print("Usage: API_KEY=your_key python test_production.py")
+    exit(1)
 
 # Test 1: Email
 print("\n[TEST 1] Email Execution")
@@ -22,7 +28,7 @@ email_request = {
 try:
     response = requests.post(
         f"{BACKEND_URL}/api/assistant",
-        headers={"Content-Type": "application/json", "X-API-Key": "localtest"},
+        headers={"Content-Type": "application/json", "X-API-Key": API_KEY},
         json=email_request,
         timeout=60
     )
@@ -58,7 +64,7 @@ whatsapp_request = {
 try:
     response = requests.post(
         f"{BACKEND_URL}/api/assistant",
-        headers={"Content-Type": "application/json", "X-API-Key": "localtest"},
+        headers={"Content-Type": "application/json", "X-API-Key": API_KEY},
         json=whatsapp_request,
         timeout=60
     )

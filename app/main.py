@@ -27,7 +27,7 @@ if os.getenv("SENTRY_DSN"):
     import sentry_sdk
     sentry_sdk.init(
         dsn=os.getenv("SENTRY_DSN"),
-        traces_sample_rate=1.0,
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
         environment=os.getenv("ENV", "production"),
     )
 
@@ -115,12 +115,9 @@ def is_origin_allowed(origin: str) -> bool:
     if origin in base_allowed_origins:
         return True
     
-    # Allow Render.com subdomains (for production deployments)
-    if origin.endswith(".onrender.com") and origin.startswith("https://"):
-        return True
-    
-    # Allow any Render.com subdomain with ai-assistant in the name
-    if "ai-assistant" in origin and origin.endswith(".onrender.com"):
+    # Allow ai-assistant Render.com subdomains (for production deployments)
+    import re
+    if re.match(r"https://ai-assistant[-\w]*\.onrender\.com$", origin):
         return True
     
     return False
@@ -129,7 +126,8 @@ def is_origin_allowed(origin: str) -> bool:
 # FastAPI CORSMiddleware supports allow_origin_regex OR allow_origins, not both
 # So we'll use allow_origins with a function approach via allow_origin_regex pattern
 # Pattern matches: localhost, 127.0.0.1, and all Render.com subdomains
-cors_regex_pattern = r"(http://localhost:\d+|http://127\.0\.0\.1:\d+|https://.*\.onrender\.com)"
+# Only allow ai-assistant-related Render.com subdomains, not ALL onrender.com subdomains
+cors_regex_pattern = r"(http://localhost:\d+|http://127\.0\.0\.1:\d+|https://ai-assistant[-\w]*\.onrender\.com)"
 
 app.add_middleware(
     CORSMiddleware,
@@ -157,8 +155,13 @@ async def security_middleware(request: Request, call_next):
         return response
 
     if request.url.path.startswith("/api"):
+        from fastapi import HTTPException
         try:
             rate_limit(request)
+        except HTTPException as e:
+            if e.status_code == 429:
+                return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+            logger.warning(f"Rate limit check failed: {e}. Allowing request.")
         except Exception as e:
             logger.warning(f"Rate limit check failed: {e}. Allowing request.")
         
@@ -177,7 +180,7 @@ async def security_middleware(request: Request, call_next):
             cors_origin = "*"
             if origin:
                 import re
-                cors_pattern = r"(http://localhost:\d+|http://127\.0\.0\.1:\d+|https://.*\.onrender\.com)"
+                cors_pattern = r"(http://localhost:\d+|http://127\.0\.0\.1:\d+|https://ai-assistant[-\w]*\.onrender\.com)"
                 if re.match(cors_pattern, origin):
                     cors_origin = origin
                 elif origin in base_allowed_origins:

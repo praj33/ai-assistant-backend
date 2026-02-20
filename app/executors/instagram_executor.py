@@ -24,14 +24,18 @@ class InstagramExecutor:
                 }
             
             url = f"{self.base_url}/{self.page_id}/messages"
-            
+
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json"
+            }
+
             data = {
                 "recipient": {"id": recipient_id},
-                "message": {"text": message},
-                "access_token": self.access_token
+                "message": {"text": message}
             }
-            
-            response = requests.post(url, json=data)
+
+            response = requests.post(url, json=data, headers=headers, timeout=30)
             
             if response.status_code == 200:
                 result = response.json()
