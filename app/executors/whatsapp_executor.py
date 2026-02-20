@@ -37,7 +37,8 @@ class WhatsAppExecutor:
             response = requests.post(
                 self.base_url,
                 data=data,
-                auth=(self.account_sid, self.auth_token)
+                auth=(self.account_sid, self.auth_token),
+                timeout=30
             )
             
             if response.status_code == 201:
