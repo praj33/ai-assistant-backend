@@ -1,19 +1,41 @@
 import io
 from typing import Dict, Any, Optional
 from datetime import datetime
-from pydub import AudioSegment
-import speech_recognition as sr
-from gtts import gTTS
+
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+
+try:
+    import speech_recognition as sr
+    SR_AVAILABLE = True
+except ImportError:
+    SR_AVAILABLE = False
+
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
 
 
 class AudioService:
     def __init__(self):
-        self.recognizer = sr.Recognizer()
+        if SR_AVAILABLE:
+            self.recognizer = sr.Recognizer()
+        else:
+            self.recognizer = None
     
     def text_to_speech(self, text: str, language: str = "en", output_format: str = "mp3") -> bytes:
         """
         Convert text to speech and return audio bytes
         """
+        if not GTTS_AVAILABLE:
+            print("gTTS not available, audio output disabled")
+            return b""
+        
         try:
             tts = gTTS(text=text, lang=language, slow=False)
             audio_buffer = io.BytesIO()
@@ -29,6 +51,10 @@ class AudioService:
         """
         Convert speech (audio bytes) to text
         """
+        if not PYDUB_AVAILABLE or not SR_AVAILABLE:
+            print("Audio processing libraries not available")
+            return ""
+        
         try:
             # Save audio bytes to a temporary file for processing
             audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
