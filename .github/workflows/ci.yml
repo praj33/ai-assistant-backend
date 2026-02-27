@@ -32,13 +32,3 @@ jobs:
     - name: Verify imports
       run: |
         python -c "from app.main import app; print('✓ FastAPI app OK')"
-
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-    - name: Deploy to Render
-      run: |
-        curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
