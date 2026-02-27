@@ -27,6 +27,7 @@ CRISIS_SAFE_RESPONSE = (
     "I'm really glad you shared this. I can't help with harming yourself, "
     "but I want you to have immediate support right now. "
     "If you're in immediate danger, call emergency services now. "
+    "In India, call 112 for emergency services or contact AASRA at 9820466726. "
     "In the U.S. and Canada, call or text 988 for the Suicide & Crisis Lifeline. "
     "If you're elsewhere, contact your local emergency number or nearest crisis line."
 )
