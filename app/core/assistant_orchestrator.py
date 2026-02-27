@@ -159,7 +159,7 @@ async def handle_assistant_request(request):
         
         # Handle audio input if provided (skip placeholder values from Swagger UI)
         audio_data = getattr(request.input, 'audio_data', None)
-        if audio_data and audio_data not in ["string", "", None]:
+        if audio_data and isinstance(audio_data, bytes) and len(audio_data) > 0:
             # Convert speech to text using audio service
             try:
                 text = audio_service.speech_to_text(
