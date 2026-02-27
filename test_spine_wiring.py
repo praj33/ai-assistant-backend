@@ -35,7 +35,7 @@ async def test_spine_wiring():
     try:
         from core.assistant_orchestrator import handle_assistant_request
         
-        print("🔧 FULL SPINE WIRING TEST")
+        print("Full Spine Wiring Test")
         print("=" * 50)
         
         # Test scenarios
@@ -63,4 +63,108 @@ async def test_spine_wiring():
         ]
         
         for i, test_case in enumerate(test_cases, 1):
-            print(f\"\\n🧪 Test {i}: {test_case['name']}\")\n            print(f\"Input: {test_case['message']}\")\n            print(f\"Expected: {test_case['expected_flow']}\")\n            print(\"-\" * 30)\n            \n            # Create mock request\n            request = MockRequest(test_case['message'])\n            \n            # Process request\n            try:\n                result = await handle_assistant_request(request)\n                \n                # Display results\n                print(f\"✅ Status: {result.get('status', 'unknown')}\")\n                print(f\"📋 Type: {result.get('result', {}).get('type', 'unknown')}\")\n                print(f\"💬 Response: {result.get('result', {}).get('response', 'No response')[:100]}...\")\n                print(f\"🔍 Trace ID: {result.get('trace_id', 'No trace ID')}\")\n                \n                # Show enforcement decision\n                enforcement = result.get('result', {}).get('enforcement', {})\n                if enforcement:\n                    print(f\"⚖️  Enforcement: {enforcement.get('decision', 'unknown')} - {enforcement.get('reason_code', 'no reason')}\")\n                \n                # Show safety decision\n                safety = result.get('result', {}).get('safety', {})\n                if safety:\n                    print(f\"🛡️  Safety: {safety.get('decision', 'unknown')} - {safety.get('risk_category', 'no category')}\")\n                \n                # Show execution result\n                execution = result.get('result', {}).get('execution', {})\n                if execution:\n                    print(f\"⚡ Execution: {execution.get('status', 'unknown')} - {execution.get('action_type', 'no action')}\")\n                \n                print(\"✅ Test completed successfully\")\n                \n            except Exception as e:\n                print(f\"❌ Test failed: {str(e)}\")\n                import traceback\n                print(f\"Stack trace: {traceback.format_exc()}\")\n        \n        print(\"\\n\" + \"=\" * 50)\n        print(\"🎯 SPINE WIRING TEST COMPLETE\")\n        print(\"\\nKey Integration Points Verified:\")\n        print(\"✓ /api/assistant as single entry point\")\n        print(\"✓ Safety service integration (Aakansha)\")\n        print(\"✓ Intelligence service integration (Sankalp)\")\n        print(\"✓ Enforcement service integration (Raj)\")\n        print(\"✓ Execution service integration (Chandresh)\")\n        print(\"✓ Bucket logging integration (Ashmit)\")\n        print(\"✓ Trace ID flow through all services\")\n        print(\"✓ Deterministic response generation\")\n        \n    except ImportError as e:\n        print(f\"❌ Import error: {e}\")\n        print(\"Make sure you're running this from the Backend directory\")\n    except Exception as e:\n        print(f\"❌ Unexpected error: {e}\")\n        import traceback\n        print(f\"Stack trace: {traceback.format_exc()}\")\n\ndef test_service_status():\n    \"\"\"Test individual service status\"\"\"\n    print(\"\\n🔍 SERVICE STATUS CHECK\")\n    print(\"=\" * 30)\n    \n    try:\n        from services.safety_service import SafetyService\n        from services.intelligence_service import IntelligenceService\n        from services.enforcement_service import EnforcementService\n        from services.bucket_service import BucketService\n        from services.execution_service import ExecutionService\n        \n        services = [\n            (\"Safety\", SafetyService),\n            (\"Intelligence\", IntelligenceService),\n            (\"Enforcement\", EnforcementService),\n            (\"Bucket\", BucketService),\n            (\"Execution\", ExecutionService)\n        ]\n        \n        for name, service_class in services:\n            try:\n                service = service_class()\n                status = service.get_status()\n                print(f\"✅ {name} Service: {status.get('status', 'unknown')}\")\n            except Exception as e:\n                print(f\"❌ {name} Service: Error - {str(e)}\")\n                \n    except ImportError as e:\n        print(f\"❌ Service import error: {e}\")\n\nif __name__ == \"__main__\":\n    import asyncio\n    \n    print(\"🚀 AI ASSISTANT FULL SPINE WIRING TEST\")\n    print(f\"Timestamp: {datetime.utcnow().isoformat()}Z\")\n    print(\"=\" * 60)\n    \n    # Test service status first\n    test_service_status()\n    \n    # Test full spine wiring\n    asyncio.run(test_spine_wiring())\n    \n    print(\"\\n🏁 All tests completed!\")
+            print(f"\nTest {i}: {test_case['name']}")
+            print(f"Input: {test_case['message']}")
+            print(f"Expected: {test_case['expected_flow']}")
+            print("-" * 30)
+            
+            # Create mock request
+            request = MockRequest(test_case['message'])
+            
+            # Process request
+            try:
+                result = await handle_assistant_request(request)
+                
+                # Display results
+                print(f"Status: {result.get('status', 'unknown')}")
+                print(f"Type: {result.get('result', {}).get('type', 'unknown')}")
+                print(f"Response: {result.get('result', {}).get('response', 'No response')[:100]}...")
+                print(f"Trace ID: {result.get('trace_id', 'No trace ID')}")
+                
+                # Show enforcement decision
+                enforcement = result.get('result', {}).get('enforcement', {})
+                if enforcement:
+                    print(f"Enforcement: {enforcement.get('decision', 'unknown')} - {enforcement.get('reason_code', 'no reason')}")
+                
+                # Show safety decision
+                safety = result.get('result', {}).get('safety', {})
+                if safety:
+                    print(f"Safety: {safety.get('decision', 'unknown')} - {safety.get('risk_category', 'no category')}")
+                
+                # Show execution result
+                execution = result.get('result', {}).get('execution', {})
+                if execution:
+                    print(f"Execution: {execution.get('status', 'unknown')} - {execution.get('action_type', 'no action')}")
+                
+                print("Test completed successfully")
+                
+            except Exception as e:
+                print(f"Test failed: {str(e)}")
+                import traceback
+                print(f"Stack trace: {traceback.format_exc()}")
+        
+        print("\n" + "=" * 50)
+        print("Spine Wiring Test Complete")
+        print("\nKey Integration Points Verified:")
+        print("✓ /api/assistant as single entry point")
+        print("✓ Safety service integration (Aakansha)")
+        print("✓ Intelligence service integration (Sankalp)")
+        print("✓ Enforcement service integration (Raj)")
+        print("✓ Execution service integration (Chandresh)")
+        print("✓ Bucket logging integration (Ashmit)")
+        print("✓ Trace ID flow through all services")
+        print("✓ Deterministic response generation")
+        
+    except ImportError as e:
+        print(f"Import error: {e}")
+        print("Make sure you're running this from the Backend directory")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        import traceback
+        print(f"Stack trace: {traceback.format_exc()}")
+
+def test_service_status():
+    """Test individual service status"""
+    print("\nService Status Check")
+    print("=" * 30)
+    
+    try:
+        from services.safety_service import SafetyService
+        from services.intelligence_service import IntelligenceService
+        from services.enforcement_service import EnforcementService
+        from services.bucket_service import BucketService
+        from services.execution_service import ExecutionService
+        
+        services = [
+            ("Safety", SafetyService),
+            ("Intelligence", IntelligenceService),
+            ("Enforcement", EnforcementService),
+            ("Bucket", BucketService),
+            ("Execution", ExecutionService)
+        ]
+        
+        for name, service_class in services:
+            try:
+                service = service_class()
+                status = service.get_status()
+                print(f"✓ {name} Service: {status.get('status', 'unknown')}")
+            except Exception as e:
+                print(f"✗ {name} Service: Error - {str(e)}")
+                
+    except ImportError as e:
+        print(f"Service import error: {e}")
+
+if __name__ == "__main__":
+    import asyncio
+    
+    print("AI Assistant Full Spine Wiring Test")
+    print(f"Timestamp: {datetime.utcnow().isoformat()}Z")
+    print("=" * 60)
+    
+    # Test service status first
+    test_service_status()
+    
+    # Test full spine wiring
+    asyncio.run(test_spine_wiring())
+    
+    print("\nAll tests completed!")

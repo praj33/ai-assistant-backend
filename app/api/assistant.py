@@ -16,6 +16,8 @@ router = APIRouter()
 class AssistantInput(BaseModel):
     message: Optional[str] = None
     summarized_payload: Optional[dict] = None
+    audio_data: Optional[bytes] = None
+    audio_format: Optional[str] = "mp3"
 
 
 class AssistantContext(BaseModel):
@@ -23,6 +25,10 @@ class AssistantContext(BaseModel):
     device: str = "desktop"
     session_id: Optional[str] = None
     voice_input: bool = False
+    preferred_language: Optional[str] = "auto"
+    detected_language: Optional[str] = None
+    audio_input_data: Optional[bytes] = None
+    audio_output_requested: bool = False
 
 
 class AssistantRequest(BaseModel):
@@ -41,6 +47,8 @@ class AssistantResult(BaseModel):
     task: Optional[dict] = None
     enforcement: Optional[dict] = None
     safety: Optional[dict] = None
+    language_metadata: Optional[dict] = None
+    audio_response: Optional[bytes] = None
 
 
 class AssistantSuccessResponse(BaseModel):

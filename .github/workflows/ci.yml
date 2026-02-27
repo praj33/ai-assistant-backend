@@ -1,0 +1,44 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Run health check
+      run: |
+        python -c "from app.services.safety_service import SafetyService; print('✓ Safety Service OK')"
+        python -c "from app.services.intelligence_service import IntelligenceService; print('✓ Intelligence Service OK')"
+        python -c "from app.services.enforcement_service import EnforcementService; print('✓ Enforcement Service OK')"
+    
+    - name: Verify imports
+      run: |
+        python -c "from app.main import app; print('✓ FastAPI app OK')"
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Deploy to Render
+      run: |
+        curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}

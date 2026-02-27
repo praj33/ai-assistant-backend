@@ -38,6 +38,7 @@ from app.core.logging import setup_logging, get_logger
 from app.core.database import create_tables
 from app.core.security import rate_limit, audit_log
 from app.api.assistant import router as assistant_router
+from app.api.webhooks import router as webhook_router
 
 # -------------------------------------------------
 # Logging
@@ -211,6 +212,7 @@ async def security_middleware(request: Request, call_next):
 # ONLY PUBLIC ROUTER (LOCKED)
 # -------------------------------------------------
 app.include_router(assistant_router)
+app.include_router(webhook_router)
 
 # -------------------------------------------------
 # System Endpoints

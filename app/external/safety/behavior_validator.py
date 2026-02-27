@@ -103,13 +103,14 @@ class PatternLibrary:
             (r'\bbomb.*school\b', 98, "School bomb threat"),
             (r'\bkill myself\b', 100, "Suicidal intent"),
             (r'\bunalive.*myself\b', 100, "Suicidal intent (slang)"),
-            (r'\bwant to kill myself\b', 100, "Suicidal intent"),
+            (r'\bwant.*kill myself\b', 100, "Suicidal intent"),
             (r'\bwant.*to.*die\b', 92, "Death wish"),
             (r'\bsuicide\b', 98, "Suicide mention"),
             (r'\bend.*my.*life\b', 94, "Life termination"),
             (r'\bjump.*from.*building\b', 90, "Suicide method"),
             (r'\bhammer.*my.*head\b', 85, "Self-harm method"),
-            (r'\bhurt myself.*if.*you don\'t\b', 95, "Self-harm threat"),
+            (r'\bhurt.*myself\b', 95, "Self-harm intent"),
+            (r'\bharm.*myself\b', 95, "Self-harm intent"),
 
             (r'\bhelp me buy some drugs\b', 89, "Drug purchase request"),
             (r'\bhow to hack into.*bank account\b', 91, "Bank hacking request"),
@@ -176,10 +177,12 @@ class PatternLibrary:
     SOFT_REWRITE_PATTERNS = {
         # EMOTIONAL_DEPENDENCY_BAIT patterns - IMPROVED
         RiskCategory.EMOTIONAL_DEPENDENCY_BAIT: [
-            (r'\bcan only talk to you\b', 68, "Exclusive dependency"),
-            (r'\beveryone else misunderstands\b', 65, "Social isolation"),
-            (r'\byou\'re the only one.*gets me\b', 75, "Exclusive understanding"),
-            (r'\bdon\'t ever leave me\b', 78, "Abandonment fear"),
+            (r'\bcan.*only.*talk.*to.*you\b', 68, "Exclusive dependency"),
+            (r'\beveryone.*else.*misunderstands\b', 65, "Social isolation"),
+            (r'\byou.*only.*one.*gets.*me\b', 75, "Exclusive understanding"),
+            (r'\byou.*only.*one.*understands.*me\b', 77, "Exclusive understanding"),
+            (r'\bcan.*live.*without.*you\b', 80, "Life dependency"),
+            (r'\bdon.*ever.*leave.*me\b', 78, "Abandonment fear"),
             (r'\bthink about our conversations all day\b', 72, "Obsessive thinking"),
             (r'\byou\'re becoming too important to me\b', 77, "Unhealthy attachment"),
             (r'\bstopped talking to my friends.*prefer you\b', 80, "Human replacement"),

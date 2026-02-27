@@ -35,12 +35,13 @@ class ExecutionService:
             Dict with execution result
         """
         try:
-            # Check enforcement decision first
-            if enforcement_decision == "BLOCK":
+            # Harden execution boundary - never trust caller blindly
+            # Require explicit ALLOW decision for execution
+            if enforcement_decision != "ALLOW":
                 return {
                     "status": "blocked",
                     "action_type": action_type,
-                    "reason": "Action blocked by enforcement policy",
+                    "reason": f"Action blocked by enforcement policy: {enforcement_decision}",
                     "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat(),
                     "service": "execution_service"

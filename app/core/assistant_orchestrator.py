@@ -18,6 +18,8 @@ from app.services.intelligence_service import IntelligenceService
 from app.services.enforcement_service import EnforcementService
 from app.services.bucket_service import BucketService
 from app.services.execution_service import ExecutionService
+from app.services.multilingual_service import MultilingualService
+from app.services.audio_service import AudioService
 
 logger = get_logger(__name__)
 
@@ -35,6 +37,8 @@ intelligence_service = IntelligenceService()
 enforcement_service = EnforcementService()
 bucket_service = BucketService()
 execution_service = ExecutionService()
+multilingual_service = MultilingualService()
+audio_service = AudioService()
 
 def generate_trace_id() -> str:
     """Generate unique trace ID for request tracking"""
@@ -134,16 +138,41 @@ async def handle_assistant_request(request):
     FULL SPINE WIRING - Central orchestrator for /api/assistant
     Calls: Safety → Intelligence → Enforcement → Orchestration → Execution
     Every step emits same trace_id and deterministic artifacts
+    Enhanced with robust error handling and fail-closed behavior
     """
     
     # Generate trace ID for entire request chain
     trace_id = generate_trace_id()
     
+    # Validate request structure first
+    if not hasattr(request, 'input') or not hasattr(request, 'context'):
+        return error_response(
+            "INVALID_REQUEST_STRUCTURE",
+            "Request must have input and context fields",
+            trace_id
+        )
+    
     try:
         # -------------------------------
         # Input normalization & logging
         # -------------------------------
-        if request.input.message:
+        
+        # Handle audio input if provided (skip placeholder values from Swagger UI)
+        audio_data = getattr(request.input, 'audio_data', None)
+        if audio_data and audio_data not in ["string", "", None]:
+            # Convert speech to text using audio service
+            try:
+                text = audio_service.speech_to_text(
+                    audio_data=audio_data,
+                    language=request.context.preferred_language if request.context.preferred_language != "auto" else "en"
+                )
+                # Set voice input flag
+                request.context.voice_input = True
+            except Exception as e:
+                logger.warning(f"[{trace_id}] Audio conversion failed: {str(e)}, falling back to message")
+                # Fall back to message if audio fails
+                text = getattr(request.input, 'message', None) or ""
+        elif hasattr(request.input, 'message') and request.input.message:
             text = request.input.message
         elif (
             request.input.summarized_payload
@@ -153,30 +182,30 @@ async def handle_assistant_request(request):
         else:
             return error_response(
                 "INVALID_INPUT",
-                "Either message or summarized_payload.summary is required",
+                "Either message or summarized_payload.summary or audio_data is required",
                 trace_id
             )
+        
+        # Detect language if not already specified
+        if not request.context.detected_language:
+            language_metadata = multilingual_service.get_language_metadata(text)
+            detected_language = language_metadata.get("detected_language", "en")
+            request.context.detected_language = detected_language
+        else:
+            detected_language = request.context.detected_language
+            language_metadata = multilingual_service.get_language_metadata(text)
         
         # Log initial request
         log_to_bucket(trace_id, "request_received", {
             "input_text": text,
+            "detected_language": detected_language,
+            "preferred_language": request.context.preferred_language,
             "context": request.context.dict() if hasattr(request.context, 'dict') else str(request.context),
             "timestamp": datetime.utcnow().isoformat()
         })
         
         # -------------------------------
-        # STEP 1: INTELLIGENCE (Sankalp)
-        # -------------------------------
-        logger.info(f"[{trace_id}] Calling Intelligence Service")
-        intelligence_context = {
-            "user_input": text,
-            "platform": request.context.platform if hasattr(request.context, 'platform') else "web",
-            "session_id": request.context.session_id if hasattr(request.context, 'session_id') else None
-        }
-        intelligence_result = call_intelligence_service(intelligence_context, trace_id)
-        
-        # -------------------------------
-        # STEP 2: SAFETY GATE (Aakansha)
+        # STEP 1: SAFETY GATE (Aakansha)
         # -------------------------------
         logger.info(f"[{trace_id}] Calling Safety Service")
         safety_result = call_safety_service(text, trace_id)
@@ -194,6 +223,17 @@ async def handle_assistant_request(request):
                 safety=safety_result,
                 trace_id=trace_id
             )
+        
+        # -------------------------------
+        # STEP 2: INTELLIGENCE (Sankalp)
+        # -------------------------------
+        logger.info(f"[{trace_id}] Calling Intelligence Service")
+        intelligence_context = {
+            "user_input": text,
+            "platform": request.context.platform if hasattr(request.context, 'platform') else "web",
+            "session_id": request.context.session_id if hasattr(request.context, 'session_id') else None
+        }
+        intelligence_result = call_intelligence_service(intelligence_context, trace_id)
         
         # -------------------------------
         # STEP 3: ENFORCEMENT (Raj)
@@ -257,7 +297,7 @@ async def handle_assistant_request(request):
         
         if enforcement_result.get("decision") == "REWRITE":
             # Use safe rewritten response
-            response_text = safety_result.get("safe_output", "I understand. Let me help you with that in a different way.")
+            response_text = enforcement_result.get("rewritten_output", "I understand. Let me help you with that in a different way.")
             result_type = "passive"
         elif intent.get("intent") == "email" or "email" in text.lower():
             # Email execution path
@@ -342,6 +382,17 @@ async def handle_assistant_request(request):
         # -------------------------------
         # FINAL RESPONSE & LOGGING
         # -------------------------------
+        
+        # Prepare audio response if requested
+        audio_response = None
+        if request.context.audio_output_requested:
+            try:
+                target_language = request.context.preferred_language if request.context.preferred_language != "auto" else detected_language
+                audio_response = audio_service.text_to_speech(response_text, language=target_language)
+            except Exception as e:
+                logger.warning(f"[{trace_id}] Audio generation failed: {str(e)}, continuing without audio")
+                # Don't fail the entire request if audio generation fails, just continue without audio
+        
         final_response = success_response(
             result_type=result_type,
             response_text=response_text,
@@ -349,7 +400,9 @@ async def handle_assistant_request(request):
             enforcement=enforcement_result,
             safety=safety_result,
             execution=execution_result,
-            trace_id=trace_id
+            trace_id=trace_id,
+            language_metadata=language_metadata,
+            audio_response=audio_response
         )
         
         log_to_bucket(trace_id, "response_generated", {
@@ -381,8 +434,8 @@ async def handle_assistant_request(request):
 # Response helpers (LOCKED)
 # ==============================
 
-def success_response(result_type, response_text, task=None, enforcement=None, safety=None, execution=None, trace_id=None):
-    return {
+def success_response(result_type, response_text, task=None, enforcement=None, safety=None, execution=None, trace_id=None, language_metadata=None, audio_response=None):
+    response = {
         "version": "3.0.0",
         "status": "success",
         "result": {
@@ -396,6 +449,16 @@ def success_response(result_type, response_text, task=None, enforcement=None, sa
         "processed_at": datetime.utcnow().isoformat() + "Z",
         "trace_id": trace_id,
     }
+    
+    # Add language metadata if provided
+    if language_metadata:
+        response["result"]["language_metadata"] = language_metadata
+    
+    # Add audio response if provided
+    if audio_response:
+        response["result"]["audio_response"] = audio_response
+    
+    return response
 
 
 def error_response(code, message, trace_id=None):
@@ -409,3 +472,5 @@ def error_response(code, message, trace_id=None):
         "processed_at": datetime.utcnow().isoformat() + "Z",
         "trace_id": trace_id,
     }
+
+# Fixed audio_data handling for Swagger UI compatibility
