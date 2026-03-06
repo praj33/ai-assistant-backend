@@ -63,14 +63,17 @@ def extract_action_parameters(text: str, action_type: str) -> Dict[str, Any]:
             }
     
     elif action_type == "whatsapp":
-        # Extract WhatsApp parameters
-        phone_match = re.search(r'(?:to|send.*?to)\s+(\+?[\d\s\-\(\)]+)', text, re.IGNORECASE)
-        message_match = re.search(r"(?:saying|message)\s+['\"](.*?)['\"]", text, re.IGNORECASE)
+        # Extract WhatsApp parameters - look for phone number anywhere in text
+        phone_match = re.search(r'(\+?\d[\d\s\-\(\)]{7,}\d)', text)
+        message_match = re.search(r"""(?:saying|message)\s+['"](.*?)['"]""", text, re.IGNORECASE)
+        if not message_match:
+            # Try unquoted: grab everything after "saying" or "message"
+            message_match = re.search(r'(?:saying|message)\s+(.+?)$', text, re.IGNORECASE)
         
         if phone_match:
             return {
                 "to": phone_match.group(1).strip(),
-                "message": message_match.group(1) if message_match else text
+                "message": message_match.group(1).strip() if message_match else text
             }
     
     return None
@@ -300,6 +303,37 @@ async def handle_assistant_request(request):
             # Use safe rewritten response
             response_text = enforcement_result.get("rewritten_output", "I understand. Let me help you with that in a different way.")
             result_type = "passive"
+        elif "whatsapp" in text.lower() or ("send message" in text.lower() and "email" not in text.lower()):
+            # WhatsApp execution path (check before email to prioritize "whatsapp" keyword)
+            result_type = "workflow"
+            action_data = extract_action_parameters(text, "whatsapp")
+            
+            if action_data:
+                logger.info(f"[{trace_id}] Executing WhatsApp action")
+                execution_result = execution_service.execute_action(
+                    action_type="whatsapp",
+                    action_data=action_data,
+                    trace_id=trace_id,
+                    enforcement_decision=enforcement_result.get("decision", "ALLOW")
+                )
+                log_to_bucket(trace_id, "action_execution", execution_result)
+                
+                if execution_result.get("status") == "success":
+                    response_text = "Successfully sent WhatsApp message."
+                    task = {"task_type": "whatsapp", "status": "completed", "execution": execution_result}
+                    saved_trace_id = await save_task_to_db(task, trace_id)
+                    if saved_trace_id:
+                        task["trace_id"] = saved_trace_id
+                elif execution_result.get("status") == "error":
+                    response_text = f"Failed to send WhatsApp: {execution_result.get('error')}"
+                    task = {"task_type": "whatsapp", "status": "failed", "error": execution_result.get('error')}
+                else:
+                    response_text = "WhatsApp action processed."
+                    task = {"task_type": "whatsapp", "status": "processed"}
+            else:
+                response_text = "Could not extract WhatsApp parameters from request."
+                task = {"task_type": "whatsapp", "status": "failed", "error": "missing_parameters"}
+                result_type = "passive"
         elif intent.get("intent") == "email" or "email" in text.lower():
             # Email execution path
             result_type = "workflow"
@@ -331,38 +365,6 @@ async def handle_assistant_request(request):
             else:
                 response_text = "Could not extract email parameters from request."
                 task = {"task_type": "email", "status": "failed", "error": "missing_parameters"}
-                result_type = "passive"
-        elif "whatsapp" in text.lower() or "send message" in text.lower():
-            # WhatsApp execution path
-            result_type = "workflow"
-            action_data = extract_action_parameters(text, "whatsapp")
-            
-            if action_data:
-                logger.info(f"[{trace_id}] Executing WhatsApp action")
-                execution_result = execution_service.execute_action(
-                    action_type="whatsapp",
-                    action_data=action_data,
-                    trace_id=trace_id,
-                    enforcement_decision=enforcement_result.get("decision", "ALLOW")
-                )
-                log_to_bucket(trace_id, "action_execution", execution_result)
-                
-                if execution_result.get("status") == "success":
-                    response_text = "Successfully sent WhatsApp message."
-                    task = {"task_type": "whatsapp", "status": "completed", "execution": execution_result}
-                    # Save task to database
-                    saved_trace_id = await save_task_to_db(task, trace_id)
-                    if saved_trace_id:
-                        task["trace_id"] = saved_trace_id
-                elif execution_result.get("status") == "error":
-                    response_text = f"Failed to send WhatsApp: {execution_result.get('error')}"
-                    task = {"task_type": "whatsapp", "status": "failed", "error": execution_result.get('error')}
-                else:
-                    response_text = "WhatsApp action processed."
-                    task = {"task_type": "whatsapp", "status": "processed"}
-            else:
-                response_text = "Could not extract WhatsApp parameters from request."
-                task = {"task_type": "whatsapp", "status": "failed", "error": "missing_parameters"}
                 result_type = "passive"
         elif intent.get("intent") == "general":
             # Generate normal response
