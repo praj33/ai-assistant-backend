@@ -18,6 +18,10 @@ class MockContext:
     def __init__(self, platform="web", session_id=None):
         self.platform = platform
         self.session_id = session_id
+        self.detected_language = None
+        self.preferred_language = "auto"
+        self.audio_output_requested = False
+        self.voice_input = False
 
 class MockInput:
     def __init__(self, message=None, summarized_payload=None):

@@ -75,65 +75,12 @@ app = FastAPI(
 )
 
 # -------------------------------------------------
-# CORS
+# CORS - Allow all origins (frontend is a separate project)
 # -------------------------------------------------
-# Note: Cannot use allow_origins=["*"] with allow_credentials=True
-# Must specify exact origins for localhost development and production
-# Support production frontend URL via environment variable
-
-# Base allowed origins for localhost development
-base_allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-]
-
-# Add production frontend URL from environment variable if set
-frontend_url = os.getenv("FRONTEND_URL")
-if frontend_url:
-    base_allowed_origins.append(frontend_url)
-    # Also add without protocol if needed
-    if frontend_url.startswith("https://"):
-        base_allowed_origins.append(frontend_url.replace("https://", "http://"))
-    elif frontend_url.startswith("http://"):
-        base_allowed_origins.append(frontend_url.replace("http://", "https://"))
-
-# Add known Render.com frontend URLs
-known_render_origins = [
-    "https://ai-assistant-yykb.onrender.com",
-    "https://ai-assistant-frontend.onrender.com",
-]
-base_allowed_origins.extend(known_render_origins)
-
-# Function to check if origin is allowed (supports dynamic checking)
-def is_origin_allowed(origin: str) -> bool:
-    """Check if an origin is allowed, including Render.com subdomains"""
-    if not origin:
-        return False
-    
-    # Check against explicit list
-    if origin in base_allowed_origins:
-        return True
-    
-    # Allow ai-assistant Render.com subdomains (for production deployments)
-    import re
-    if re.match(r"https://ai-assistant[-\w]*\.onrender\.com$", origin):
-        return True
-    
-    return False
-
-# Combine explicit origins and Render.com pattern
-# FastAPI CORSMiddleware supports allow_origin_regex OR allow_origins, not both
-# So we'll use allow_origins with a function approach via allow_origin_regex pattern
-# Pattern matches: localhost, 127.0.0.1, and all Render.com subdomains
-# Only allow ai-assistant-related Render.com subdomains, not ALL onrender.com subdomains
-cors_regex_pattern = r"(http://localhost:\d+|http://127\.0\.0\.1:\d+|https://ai-assistant[-\w]*\.onrender\.com)"
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=cors_regex_pattern,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -175,26 +122,13 @@ async def security_middleware(request: Request, call_next):
         if not api_key or api_key != expected_api_key:
             # Get origin from request for CORS headers
             origin = request.headers.get("origin", "")
-            # Return JSON response with CORS headers manually added
-            # Determine CORS origin for error response
-            # Check if origin matches allowed pattern (localhost, 127.0.0.1, or render.com)
-            cors_origin = "*"
-            if origin:
-                import re
-                cors_pattern = r"(http://localhost:\d+|http://127\.0\.0\.1:\d+|https://ai-assistant[-\w]*\.onrender\.com)"
-                if re.match(cors_pattern, origin):
-                    cors_origin = origin
-                elif origin in base_allowed_origins:
-                    cors_origin = origin
-                elif base_allowed_origins:
-                    cors_origin = base_allowed_origins[0]
+            cors_origin = origin if origin else "*"
             
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Authentication failed"},
                 headers={
                     "Access-Control-Allow-Origin": cors_origin,
-                    "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
                     "Access-Control-Allow-Headers": "*",
                 }
