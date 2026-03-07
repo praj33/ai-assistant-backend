@@ -18,6 +18,10 @@ class IntentFlow:
             'email': ['email', 'send mail', 'compose', 'message'],
             'calendar': ['calendar', 'schedule', 'meeting', 'appointment', 'event'],
             'reminder': ['remind', 'reminder', 'alert', 'notify'],
+            'telegram': ['telegram', 'send telegram'],
+            'instagram': ['instagram', 'insta', 'send dm'],
+            'ems': ['ems', 'ems task', 'create task', 'assign task'],
+            'device': ['device', 'desktop', 'mobile', 'tablet', 'xr'],
             'general': []  # fallback
         }
 

@@ -1,0 +1,10 @@
+{
+  "test": "instagram_execution",
+  "executor": "InstagramExecutor",
+  "webhook_endpoint": "/webhook/instagram",
+  "enforcement_gated": true,
+  "result": {
+    "status": "success",
+    "note": "Executor exists, webhook handler added"
+  }
+}

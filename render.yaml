@@ -42,3 +42,17 @@ services:
         sync: false
       - key: INSTAGRAM_PAGE_ID
         sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: GOOGLE_CALENDAR_API_KEY
+        sync: false
+      - key: GOOGLE_CALENDAR_ACCESS_TOKEN
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        value: primary
+      - key: EMS_API_URL
+        sync: false
+      - key: EMS_API_KEY
+        sync: false
+      - key: META_VERIFY_TOKEN
+        value: mitra_verify_token

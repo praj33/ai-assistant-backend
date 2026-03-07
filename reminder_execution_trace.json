@@ -1,0 +1,21 @@
+{
+  "test": "reminder_execution",
+  "executor": "ReminderExecutor",
+  "methods": [
+    "create_reminder",
+    "list_reminders",
+    "cancel_reminder"
+  ],
+  "enforcement_gated": true,
+  "result": {
+    "status": "success",
+    "action": "create_reminder",
+    "reminder_id": "rem_d14e25ba0c6d",
+    "message": "Call mom",
+    "remind_at": "2026-03-07T11:28:25.860945",
+    "method": "reminder_service",
+    "trace_id": "test_trace_003",
+    "timestamp": "2026-03-07T10:28:25.861944",
+    "platform": "reminder"
+  }
+}

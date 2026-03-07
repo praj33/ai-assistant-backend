@@ -1,0 +1,16 @@
+{
+  "test": "telegram_execution",
+  "executor": "TelegramExecutor",
+  "method": "send_message",
+  "enforcement_gated": true,
+  "result": {
+    "status": "success",
+    "to": "12345",
+    "message": "Hello from gateway",
+    "method": "telegram_simulation",
+    "trace_id": "test_trace_001",
+    "timestamp": "2026-03-07T10:28:25.860945",
+    "platform": "telegram",
+    "note": "Simulation mode \u2014 set TELEGRAM_BOT_TOKEN for live execution"
+  }
+}

@@ -46,15 +46,13 @@ def generate_trace_id() -> str:
     return f"trace_{uuid.uuid4().hex[:12]}"
 
 def extract_action_parameters(text: str, action_type: str) -> Dict[str, Any]:
-    """Extract action parameters from user text"""
+    """Extract action parameters from user text for all supported platforms"""
     import re
     
     if action_type == "email":
-        # Extract email parameters
         email_match = re.search(r'(?:to|send.*?to)\s+([\w\.-]+@[\w\.-]+)', text, re.IGNORECASE)
         subject_match = re.search(r"(?:subject|with subject)\s+['\"](.*?)['\"]", text, re.IGNORECASE)
         message_match = re.search(r"(?:message|saying|body)\s+['\"](.*?)['\"]", text, re.IGNORECASE)
-        
         if email_match:
             return {
                 "to": email_match.group(1),
@@ -63,20 +61,98 @@ def extract_action_parameters(text: str, action_type: str) -> Dict[str, Any]:
             }
     
     elif action_type == "whatsapp":
-        # Extract WhatsApp parameters - look for phone number anywhere in text
         phone_match = re.search(r'(\+?\d[\d\s\-\(\)]{7,}\d)', text)
         message_match = re.search(r"""(?:saying|message)\s+['"](.*?)['"]""", text, re.IGNORECASE)
         if not message_match:
-            # Try unquoted: grab everything after "saying" or "message"
             message_match = re.search(r'(?:saying|message)\s+(.+?)$', text, re.IGNORECASE)
-        
         if phone_match:
             return {
                 "to": phone_match.group(1).strip(),
                 "message": message_match.group(1).strip() if message_match else text
             }
     
+    elif action_type == "telegram":
+        # Extract @username or chat_id
+        username_match = re.search(r'(?:to|@)\s*(@?[\w]+)', text, re.IGNORECASE)
+        message_match = re.search(r"(?:saying|message)\s+['\"](.*?)['\"]", text, re.IGNORECASE)
+        if not message_match:
+            message_match = re.search(r'(?:saying|message)\s+(.+?)$', text, re.IGNORECASE)
+        if username_match:
+            return {
+                "to": username_match.group(1).strip(),
+                "message": message_match.group(1).strip() if message_match else text
+            }
+    
+    elif action_type == "calendar":
+        # Extract event details
+        title_match = re.search(r'(?:called|titled|named)\s+[\'\"](.*?)[\'\"]', text, re.IGNORECASE)
+        if not title_match:
+            title_match = re.search(r'(?:called|titled|named)\s+(.+?)(?:\s+(?:at|on|for|tomorrow)|$)', text, re.IGNORECASE)
+        time_match = re.search(r'(?:at|from)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)?)', text, re.IGNORECASE)
+        date_match = re.search(r'(?:on|for)\s+(tomorrow|today|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', text, re.IGNORECASE)
+        
+        title = title_match.group(1).strip() if title_match else "New Event"
+        start_time = datetime.utcnow().isoformat()
+        return {
+            "action": "create_event",
+            "title": title,
+            "start_time": start_time,
+            "description": text
+        }
+    
+    elif action_type == "reminder":
+        message_match = re.search(r'(?:remind.*?to|reminder.*?to|remind.*?about)\s+(.+?)(?:\s+(?:at|in|tomorrow)|$)', text, re.IGNORECASE)
+        time_match = re.search(r'(?:at|in)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)?)', text, re.IGNORECASE)
+        return {
+            "action": "create_reminder",
+            "message": message_match.group(1).strip() if message_match else text,
+            "remind_at": None
+        }
+    
+    elif action_type == "ems":
+        title_match = re.search(r'(?:task|create task)\s+[\'\"](.*?)[\'\"]', text, re.IGNORECASE)
+        if not title_match:
+            title_match = re.search(r'(?:task|create task)\s+(.+?)(?:\s+(?:assign|priority|for)|$)', text, re.IGNORECASE)
+        assignee_match = re.search(r'(?:assign.*?to|for)\s+([\w\s]+?)(?:\s+(?:with|priority)|$)', text, re.IGNORECASE)
+        priority_match = re.search(r'(?:priority)\s+(high|medium|low)', text, re.IGNORECASE)
+        return {
+            "action": "create_task",
+            "title": title_match.group(1).strip() if title_match else "New Task",
+            "assignee": assignee_match.group(1).strip() if assignee_match else "",
+            "priority": priority_match.group(1).lower() if priority_match else "medium",
+            "description": text
+        }
+    
     return None
+
+
+def _detect_platform(text_lower: str, intent: Dict[str, Any]) -> str:
+    """Detect which platform to route to based on user input text."""
+    # Check explicit platform keywords (order matters — more specific first)
+    if "telegram" in text_lower:
+        return "telegram"
+    if "whatsapp" in text_lower:
+        return "whatsapp"
+    if "instagram" in text_lower or "insta " in text_lower:
+        return "instagram"
+    if "email" in text_lower or "mail" in text_lower:
+        return "email"
+    if any(kw in text_lower for kw in ["calendar", "schedule", "meeting", "appointment", "event"]):
+        return "calendar"
+    if any(kw in text_lower for kw in ["remind", "reminder", "alert me"]):
+        return "reminder"
+    if any(kw in text_lower for kw in ["ems task", "create task", "assign task"]):
+        return "ems"
+    if any(kw in text_lower for kw in ["device", "desktop", "mobile", "tablet", "xr"]):
+        return "device_gateway"
+    
+    # Fall back to intent classification
+    intent_name = intent.get("intent", "general")
+    if intent_name in ["email", "calendar", "reminder"]:
+        return intent_name
+    
+    return "general"
+
 
 async def save_task_to_db(task_data: Dict[str, Any], trace_id: str) -> Optional[str]:
     """Save task to database with trace_id"""
@@ -299,79 +375,63 @@ async def handle_assistant_request(request):
         # -------------------------------
         execution_result = None
         
+        # ─── Detect platform from text ───
+        text_lower = text.lower()
+        detected_platform = _detect_platform(text_lower, intent)
+        
         if enforcement_result.get("decision") == "REWRITE":
-            # Use safe rewritten response
             response_text = enforcement_result.get("rewritten_output", "I understand. Let me help you with that in a different way.")
             result_type = "passive"
-        elif "whatsapp" in text.lower() or ("send message" in text.lower() and "email" not in text.lower()):
-            # WhatsApp execution path (check before email to prioritize "whatsapp" keyword)
+        
+        elif detected_platform in ["whatsapp", "email", "telegram", "instagram",
+                                     "calendar", "reminder", "ems", "device_gateway"]:
+            # ─── UNIVERSAL EXECUTION PATH ───
             result_type = "workflow"
-            action_data = extract_action_parameters(text, "whatsapp")
+            action_data = extract_action_parameters(text, detected_platform)
             
             if action_data:
-                logger.info(f"[{trace_id}] Executing WhatsApp action")
+                logger.info(f"[{trace_id}] Executing {detected_platform} action")
                 execution_result = execution_service.execute_action(
-                    action_type="whatsapp",
+                    action_type=detected_platform,
                     action_data=action_data,
                     trace_id=trace_id,
                     enforcement_decision=enforcement_result.get("decision", "ALLOW")
                 )
                 log_to_bucket(trace_id, "action_execution", execution_result)
                 
-                if execution_result.get("status") == "success":
-                    response_text = "Successfully sent WhatsApp message."
-                    task = {"task_type": "whatsapp", "status": "completed", "execution": execution_result}
-                    saved_trace_id = await save_task_to_db(task, trace_id)
-                    if saved_trace_id:
-                        task["trace_id"] = saved_trace_id
-                elif execution_result.get("status") == "error":
-                    response_text = f"Failed to send WhatsApp: {execution_result.get('error')}"
-                    task = {"task_type": "whatsapp", "status": "failed", "error": execution_result.get('error')}
-                else:
-                    response_text = "WhatsApp action processed."
-                    task = {"task_type": "whatsapp", "status": "processed"}
-            else:
-                response_text = "Could not extract WhatsApp parameters from request."
-                task = {"task_type": "whatsapp", "status": "failed", "error": "missing_parameters"}
-                result_type = "passive"
-        elif intent.get("intent") == "email" or "email" in text.lower():
-            # Email execution path
-            result_type = "workflow"
-            action_data = extract_action_parameters(text, "email")
-            
-            if action_data:
-                logger.info(f"[{trace_id}] Executing email action")
-                execution_result = execution_service.execute_action(
-                    action_type="email",
-                    action_data=action_data,
-                    trace_id=trace_id,
-                    enforcement_decision=enforcement_result.get("decision", "ALLOW")
-                )
-                log_to_bucket(trace_id, "action_execution", execution_result)
+                platform_labels = {
+                    "whatsapp": "WhatsApp message",
+                    "email": "email message",
+                    "telegram": "Telegram message",
+                    "instagram": "Instagram message",
+                    "calendar": "calendar event",
+                    "reminder": "reminder",
+                    "ems": "EMS task",
+                    "device_gateway": "device command"
+                }
+                label = platform_labels.get(detected_platform, detected_platform)
                 
                 if execution_result.get("status") == "success":
-                    response_text = "Successfully sent email message."
-                    task = {"task_type": "email", "status": "completed", "execution": execution_result}
-                    # Save task to database
+                    response_text = f"Successfully processed {label}."
+                    task = {"task_type": detected_platform, "status": "completed", "execution": execution_result}
                     saved_trace_id = await save_task_to_db(task, trace_id)
                     if saved_trace_id:
                         task["trace_id"] = saved_trace_id
                 elif execution_result.get("status") == "error":
-                    response_text = f"Failed to send email: {execution_result.get('error')}"
-                    task = {"task_type": "email", "status": "failed", "error": execution_result.get('error')}
+                    response_text = f"Failed to process {label}: {execution_result.get('error')}"
+                    task = {"task_type": detected_platform, "status": "failed", "error": execution_result.get('error')}
                 else:
-                    response_text = "Email action processed."
-                    task = {"task_type": "email", "status": "processed"}
+                    response_text = f"{label.capitalize()} action processed."
+                    task = {"task_type": detected_platform, "status": "processed"}
             else:
-                response_text = "Could not extract email parameters from request."
-                task = {"task_type": "email", "status": "failed", "error": "missing_parameters"}
+                response_text = f"Could not extract {detected_platform} parameters from request."
+                task = {"task_type": detected_platform, "status": "failed", "error": "missing_parameters"}
                 result_type = "passive"
+        
         elif intent.get("intent") == "general":
-            # Generate normal response
             response_text = decision_hub.simple_response(processed_text)
             result_type = "passive"
         else:
-            # Task/workflow path
             try:
                 task = task_flow.build_task(intent)
                 response_text = "Task processed successfully"

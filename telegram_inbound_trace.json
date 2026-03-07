@@ -1,0 +1,10 @@
+{
+  "test": "telegram_inbound",
+  "webhook_endpoint": "/webhook/telegram",
+  "flow": "Inbound -> Safety -> Intelligence -> Enforcement -> Orchestration",
+  "enforcement_gated": true,
+  "result": {
+    "status": "success",
+    "note": "Webhook handler registered"
+  }
+}

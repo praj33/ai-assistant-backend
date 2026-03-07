@@ -1,0 +1,27 @@
+{
+  "test": "device_gateway",
+  "executor": "DeviceGatewayExecutor",
+  "supported_devices": [
+    "desktop",
+    "mobile",
+    "tablet",
+    "xr"
+  ],
+  "gateway_only": true,
+  "enforcement_gated": true,
+  "result": {
+    "status": "queued",
+    "action": "send_command",
+    "command_id": "cmd_edf1b6b76428",
+    "device_id": "dev_001",
+    "device_type": "desktop",
+    "command": "open_browser",
+    "payload": {},
+    "gateway_id": "gateway_134d41da",
+    "method": "device_gateway",
+    "trace_id": "test_trace_005",
+    "timestamp": "2026-03-07T10:28:25.861944",
+    "platform": "device_gateway",
+    "note": "Command queued. Device-side agent will pick up in next phase."
+  }
+}
