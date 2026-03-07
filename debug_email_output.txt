@@ -1,0 +1,56 @@
+﻿============================================================
+EMAIL DEBUG DIAGNOSTIC
+============================================================
+
+--- ENV VARS ---
+  EMAIL_USER = blackh....com
+  EMAIL_PASSWORD = ejcotf...nebv
+  SMTP_SERVER = smtp.g....com
+  SMTP_PORT = 587
+  SENDGRID_API_KEY = SG.x1Z...Pxo8
+  SENDGRID_FROM_EMAIL = blackh....com
+
+--- REGEX PARSING ---
+
+  Input: Send an email to rajprajapati8286@gmail.com with subject "AI Assistant...
+  Email:   rajprajapati8286@gmail.com
+  Subject: AI Assistant Demo
+  Message: This is a live demo
+  -> Would pass to executor: {'to': 'rajprajapati8286@gmail.com', 'subject': 'AI Assistant Demo', 'message': 'This is a live demo'}
+
+  Input: send email to test@gmail.com...
+  Email:   test@gmail.com
+  Subject: NOT FOUND
+  Message: NOT FOUND
+  -> Would pass to executor: {'to': 'test@gmail.com', 'subject': 'Message from AI Assistant', 'message': 'send email to test@gmail.com'}
+
+  Input: email test@gmail.com saying hello world...
+  Email:   NOT FOUND
+  Subject: NOT FOUND
+  Message: NOT FOUND
+  -> WOULD FAIL: 'Could not extract email parameters'
+
+  Input: Send email to user@example.com with subject "Test" message "Hello"...
+  Email:   user@example.com
+  Subject: Test
+  Message: Hello
+  -> Would pass to executor: {'to': 'user@example.com', 'subject': 'Test', 'message': 'Hello'}
+
+--- EXECUTOR TEST ---
+  SMTP: smtp.gmail.com:587
+  User: blackholeinfiverse20@gmail.com
+  Pass set: True
+  SendGrid key set: True
+
+--- SENDGRID TEST ---
+  SendGrid result: {'status': 'success', 'to': 'blackholeinfiverse20@gmail.com', 'subject': 'Debug Test', 'message': 'Debug test email', 'method': 'sendgrid', 'trace_id': 'debug_test', 'timestamp': '2026-03-07T07:47:11.253621', 'platform': 'email'}
+
+--- SMTP TEST ---
+  SMTP result: {'status': 'success', 'to': 'blackholeinfiverse20@gmail.com', 'subject': 'Debug Test SMTP', 'message': 'Debug test email via SMTP', 'method': 'smtp', 'trace_id': 'debug_smtp_test', 'timestamp': '2026-03-07T07:47:18.673302', 'platform': 'email'}
+
+--- FULL send_message() TEST ---
+  Full result: {'status': 'success', 'to': 'blackholeinfiverse20@gmail.com', 'subject': 'Debug Full Test', 'message': 'Debug full test email', 'method': 'sendgrid', 'trace_id': 'debug_full_test', 'timestamp': '2026-03-07T07:47:20.378001', 'platform': 'email'}
+
+============================================================
+DONE
+============================================================

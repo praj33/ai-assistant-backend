@@ -1,0 +1,59 @@
+{
+  "version": "3.0.0",
+  "status": "success",
+  "result": {
+    "type": "workflow",
+    "response": "Successfully sent email message.",
+    "task": {
+      "task_type": "email",
+      "status": "completed",
+      "execution": {
+        "status": "success",
+        "to": "blackholeinfiverse20@gmail.com",
+        "subject": "Test Email",
+        "message": "Hello from debug test",
+        "method": "sendgrid",
+        "trace_id": "trace_245f162bb12f",
+        "timestamp": "2026-03-07T07:48:24.084383",
+        "platform": "email"
+      },
+      "trace_id": "trace_245f162bb12f"
+    },
+    "enforcement": {
+      "decision": "ALLOW",
+      "scope": "both",
+      "trace_id": "trace_245f162bb12f",
+      "reason_code": "CONTENT_ALLOWED",
+      "timestamp": "2026-03-07T07:48:22.344147"
+    },
+    "safety": {
+      "decision": "allow",
+      "risk_category": "clean",
+      "confidence": 0.0,
+      "reason_code": "clean_content",
+      "trace_id": "trace_245f162bb12f",
+      "matched_patterns": [],
+      "explanation": "No risky patterns detected",
+      "original_output": "Send an email to blackholeinfiverse20@gmail.com with subject \"Test Email\" saying \"Hello from debug test\"",
+      "safe_output": "Send an email to blackholeinfiverse20@gmail.com with subject \"Test Email\" saying \"Hello from debug test\"",
+      "timestamp": "2026-03-07T07:48:22.344147"
+    },
+    "execution": {
+      "status": "success",
+      "to": "blackholeinfiverse20@gmail.com",
+      "subject": "Test Email",
+      "message": "Hello from debug test",
+      "method": "sendgrid",
+      "trace_id": "trace_245f162bb12f",
+      "timestamp": "2026-03-07T07:48:24.084383",
+      "platform": "email"
+    },
+    "language_metadata": {
+      "detected_language": "en",
+      "timestamp": "2026-03-07T07:48:22.339122",
+      "confidence": 0.9
+    }
+  },
+  "processed_at": "2026-03-07T07:48:27.578280Z",
+  "trace_id": "trace_245f162bb12f"
+}

@@ -1,0 +1,269 @@
+﻿python : 2026-03-07 13:18:21,730 
+- INFO - Successfully connected 
+to MongoDB
+At line:1 char:1
++ python debug_api_email.py 2>&1 
+| Out-File -Encoding utf8 
+debug_api_em ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : Not 
+   Specified: (2026-03-07 13:1..  
+  .cted to MongoDB:String) [],    
+ RemoteException
+    + FullyQualifiedErrorId : Nat 
+   iveCommandError
+ 
+2026-03-07 13:18:21,730 - INFO - 
+Audit middleware initialized with 
+MongoDB
+2026-03-07 13:18:22,339 - INFO - 
+BUCKET_LOG [trace_245f162bb12f] 
+request_received: {"trace_id": 
+"trace_245f162bb12f", "stage": 
+"request_received", "data": 
+{"input_text": "Send an email to 
+blackholeinfiverse20@gmail.com 
+with subject \"Test Email\" 
+saying \"Hello from debug 
+test\"", "detected_language": 
+"en", "preferred_language": "en", 
+"context": {"platform": "web", 
+"session_id": "debug_session"}, 
+"timestamp": 
+"2026-03-07T07:48:22.339122"}, 
+"timestamp": 
+"2026-03-07T07:48:22.339122", 
+"service": "bucket_service"}
+2026-03-07 13:18:22,339 - INFO - 
+[trace_245f162bb12f] Calling 
+Safety Service
+2026-03-07 13:18:22,344 - INFO - 
+BUCKET_LOG [trace_245f162bb12f] 
+safety_validation: {"trace_id": 
+"trace_245f162bb12f", "stage": 
+"safety_validation", "data": 
+{"decision": "allow", 
+"risk_category": "clean", 
+"confidence": 0.0, "reason_code": 
+"clean_content", "trace_id": 
+"trace_245f162bb12f", 
+"matched_patterns": [], 
+"explanation": "No risky patterns 
+detected", "original_output": 
+"Send an email to 
+blackholeinfiverse20@gmail.com 
+with subject \"Test Email\" 
+saying \"Hello from debug 
+test\"", "safe_output": "Send an 
+email to 
+blackholeinfiverse20@gmail.com 
+with subject \"Test Email\" 
+saying \"Hello from debug 
+test\"", "timestamp": 
+"2026-03-07T07:48:22.344147"}, 
+"timestamp": 
+"2026-03-07T07:48:22.344147", 
+"service": "bucket_service"}
+2026-03-07 13:18:22,344 - INFO - 
+[trace_245f162bb12f] Calling 
+Intelligence Service
+2026-03-07 13:18:22,344 - INFO - 
+BUCKET_LOG [trace_245f162bb12f] 
+intelligence_processing: 
+{"trace_id": 
+"trace_245f162bb12f", "stage": 
+"intelligence_processing", 
+"data": {"behavioral_state": 
+"restricted", 
+"expression_profile": "low", 
+"safe_mode": "on", "speech_mode": 
+"text_only", "confidence": 
+"high", "constraints": 
+{"gating_flags": 
+["ambiguous_age"]}, "timestamp": "
+2026-03-07T07:48:22.344147+00:00",
+ "trace_id": 
+"trace_245f162bb12f"}, 
+"timestamp": 
+"2026-03-07T07:48:22.344147", 
+"service": "bucket_service"}
+2026-03-07 13:18:22,344 - INFO - 
+[trace_245f162bb12f] Calling 
+Enforcement Service
+2026-03-07 13:18:22,344 - INFO - 
+BUCKET_LOG [trace_245f162bb12f] 
+enforcement_decision: 
+{"trace_id": 
+"trace_245f162bb12f", "stage": 
+"enforcement_decision", "data": 
+{"decision": "ALLOW", "scope": 
+"both", "trace_id": 
+"trace_245f162bb12f", 
+"reason_code": "CONTENT_ALLOWED", 
+"timestamp": 
+"2026-03-07T07:48:22.344147"}, 
+"timestamp": 
+"2026-03-07T07:48:22.344147", 
+"service": "bucket_service"}
+2026-03-07 13:18:22,344 - INFO - 
+[trace_245f162bb12f] Processing 
+through Orchestration
+2026-03-07 13:18:22,345 - INFO - 
+BUCKET_LOG [trace_245f162bb12f] 
+orchestration_processing: 
+{"trace_id": 
+"trace_245f162bb12f", "stage": 
+"orchestration_processing", 
+"data": {"processed_text": "Send 
+an email to 
+blackholeinfiverse20@gmail com 
+with subject \"Test Email\" 
+saying \"Hello from debug 
+test\"", "intent": {"intent": 
+"email", "entities": {}, 
+"dates_times": {}, "context": 
+{"urgency": "normal", "priority": 
+"medium", "sentiment": 
+"neutral"}, "confidence": 0.8, 
+"timestamp": 
+"2026-03-07T13:18:22.345148", 
+"version": "intentflow_v1", 
+"original_text": "Send an email 
+to blackholeinfiverse20@gmail com 
+with subject \"Test Email\" 
+saying \"Hello from debug 
+test\""}, "enforcement_decision": 
+"ALLOW"}, "timestamp": 
+"2026-03-07T07:48:22.345148", 
+"service": "bucket_service"}
+2026-03-07 13:18:22,345 - INFO - 
+[trace_245f162bb12f] Executing 
+email action
+2026-03-07 13:18:24,085 - INFO - 
+BUCKET_LOG [trace_245f162bb12f] 
+action_execution: {"trace_id": 
+"trace_245f162bb12f", "stage": 
+"action_execution", "data": 
+{"status": "success", "to": 
+"blackholeinfiverse20@gmail.com", 
+"subject": "Test Email", 
+"message": "Hello from debug 
+test", "method": "sendgrid", 
+"trace_id": "trace_245f162bb12f", 
+"timestamp": 
+"2026-03-07T07:48:24.084383", 
+"platform": "email"}, 
+"timestamp": 
+"2026-03-07T07:48:24.085382", 
+"service": "bucket_service"}
+2026-03-07 13:18:27,578 - INFO - 
+[trace_245f162bb12f] Task saved 
+to DB
+2026-03-07 13:18:27,578 - INFO - 
+BUCKET_LOG [trace_245f162bb12f] 
+response_generated: {"trace_id": 
+"trace_245f162bb12f", "stage": 
+"response_generated", "data": 
+{"final_response": {"version": 
+"3.0.0", "status": "success", 
+"result": {"type": "workflow", 
+"response": "Successfully sent 
+email message.", "task": 
+{"task_type": "email", "status": 
+"completed", "execution": 
+{"status": "success", "to": 
+"blackholeinfiverse20@gmail.com", 
+"subject": "Test Email", 
+"message": "Hello from debug 
+test", "method": "sendgrid", 
+"trace_id": "trace_245f162bb12f", 
+"timestamp": 
+"2026-03-07T07:48:24.084383", 
+"platform": "email"}, "trace_id": 
+"trace_245f162bb12f"}, 
+"enforcement": {"decision": 
+"ALLOW", "scope": "both", 
+"trace_id": "trace_245f162bb12f", 
+"reason_code": "CONTENT_ALLOWED", 
+"timestamp": 
+"2026-03-07T07:48:22.344147"}, 
+"safety": {"decision": "allow", 
+"risk_category": "clean", 
+"confidence": 0.0, "reason_code": 
+"clean_content", "trace_id": 
+"trace_245f162bb12f", 
+"matched_patterns": [], 
+"explanation": "No risky patterns 
+detected", "original_output": 
+"Send an email to 
+blackholeinfiverse20@gmail.com 
+with subject \"Test Email\" 
+saying \"Hello from debug 
+test\"", "safe_output": "Send an 
+email to 
+blackholeinfiverse20@gmail.com 
+with subject \"Test Email\" 
+saying \"Hello from debug 
+test\"", "timestamp": 
+"2026-03-07T07:48:22.344147"}, 
+"execution": {"status": 
+"success", "to": 
+"blackholeinfiverse20@gmail.com", 
+"subject": "Test Email", 
+"message": "Hello from debug 
+test", "method": "sendgrid", 
+"trace_id": "trace_245f162bb12f", 
+"timestamp": 
+"2026-03-07T07:48:24.084383", 
+"platform": "email"}, 
+"language_metadata": 
+{"detected_language": "en", 
+"timestamp": 
+"2026-03-07T07:48:22.339122", 
+"confidence": 0.9}}, 
+"processed_at": 
+"2026-03-07T07:48:27.578280Z", 
+"trace_id": 
+"trace_245f162bb12f"}, 
+"chain_complete": true}, 
+"timestamp": 
+"2026-03-07T07:48:27.578280", 
+"service": "bucket_service"}
+2026-03-07 13:18:27,578 - INFO - 
+[trace_245f162bb12f] Request 
+processing complete
+============================================================
+TEST 1: Parameter extraction
+============================================================
+
+  Input:  Send an email to rajprajapati8286@gmail.com with subject "AI Assistant...
+  Result: {'to': 'rajprajapati8286@gmail.com', 'subject': 'AI Assistant Demo', 'message': 'This is a live demo'}
+
+  Input:  send email to blackholeinfiverse20@gmail.com saying "hello there"...
+  Result: {'to': 'blackholeinfiverse20@gmail.com', 'subject': 'Message from AI Assistant', 'message': 'hello there'}
+
+  Input:  email blackholeinfiverse20@gmail.com...
+  Result: None
+
+  Input:  send an email to blackholeinfiverse20@gmail.com...
+  Result: {'to': 'blackholeinfiverse20@gmail.com', 'subject': 'Message from AI Assistant', 'message': 'send an email to blackholeinfiverse20@gmail.com'}
+
+============================================================
+TEST 2: Full orchestrator request
+============================================================
+
+  Sending: Send an email to blackholeinfiverse20@gmail.com with subject "Test Ema...
+
+  Status:     success
+  Trace ID:   trace_245f162bb12f
+  Type:       workflow
+  Response:   Successfully sent email message.
+  Execution:  {'status': 'success', 'to': 'blackholeinfiverse20@gmail.com', 'subject': 'Test Email', 'message': 'Hello from debug test', 'method': 'sendgrid', 'trace_id': 'trace_245f162bb12f', 'timestamp': '2026-03-07T07:48:24.084383', 'platform': 'email'}
+  Enforcement decision: ALLOW
+  Safety decision: allow
+
+  Full response saved to: debug_api_email_response.json
+
+============================================================
+DONE
+============================================================
