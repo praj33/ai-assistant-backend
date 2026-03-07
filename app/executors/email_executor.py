@@ -25,6 +25,78 @@ class EmailExecutor:
         self.gmail_token = os.getenv("GMAIL_ACCESS_TOKEN")
         self.sendgrid_key = os.getenv("SENDGRID_API_KEY")
         self.sendgrid_from = os.getenv("SENDGRID_FROM_EMAIL", self.email_user)
+        # Brevo (formerly Sendinblue) - works on Render via HTTP API
+        self.brevo_key = os.getenv("BREVO_API_KEY")
+        self.brevo_from = os.getenv("BREVO_FROM_EMAIL", self.email_user)
+        self.brevo_from_name = os.getenv("BREVO_FROM_NAME", "AI Assistant")
+        
+    def send_email_brevo(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+        """Send email via Brevo (Sendinblue) HTTP API - works on Render"""
+        try:
+            if not self.brevo_key:
+                return {
+                    "status": "error",
+                    "error": "Brevo API key not configured",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            
+            headers = {
+                'api-key': self.brevo_key,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+            
+            data = {
+                'sender': {
+                    'name': self.brevo_from_name,
+                    'email': self.brevo_from
+                },
+                'to': [{'email': to_email}],
+                'subject': subject,
+                'textContent': message
+            }
+            
+            logger.info(f"[{trace_id}] Sending email via Brevo API to {to_email}")
+            response = requests.post(
+                'https://api.brevo.com/v3/smtp/email',
+                headers=headers,
+                json=data,
+                timeout=30
+            )
+            
+            if response.status_code in [200, 201]:
+                result_data = response.json()
+                logger.info(f"[{trace_id}] Brevo email sent successfully to {to_email}, messageId: {result_data.get('messageId')}")
+                return {
+                    "status": "success",
+                    "to": to_email,
+                    "subject": subject,
+                    "message": message,
+                    "method": "brevo",
+                    "message_id": result_data.get("messageId"),
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "email"
+                }
+            else:
+                error_msg = response.text
+                logger.error(f"[{trace_id}] Brevo API error: {response.status_code} - {error_msg}")
+                return {
+                    "status": "error",
+                    "error": f"Brevo API error: {response.status_code} - {error_msg}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"[{trace_id}] Brevo email failed: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
         
     def send_email_smtp_ssl(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
         """Send email via SMTP with SSL on port 465 (works on Render.com)"""
@@ -266,48 +338,71 @@ class EmailExecutor:
 
     def send_message(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
         """
-        Main send method - Priority order:
-        1. Gmail SMTP SSL (port 465) - most reliable, works on Render
-        2. Gmail SMTP STARTTLS (port 587) - fallback
-        3. SendGrid API - fallback (needs sender verification)
-        4. Gmail API - fallback (needs OAuth token)
+        Main send method - Auto-detects environment:
+        - On Render/cloud: SendGrid API first (SMTP ports are blocked)
+        - Locally: SMTP SSL first (most reliable for actual delivery)
         """
         # Validate inputs before sending
         validation_error = self._validate_inputs(to_email, subject, message, trace_id)
         if validation_error:
             return validation_error
 
-        # Try SMTP SSL first (most reliable on cloud platforms)
-        if self.email_user and self.email_password:
-            logger.info(f"[{trace_id}] Trying Gmail SMTP SSL (port 465) first")
-            result = self.send_email_smtp_ssl(to_email, subject, message, trace_id)
-            if result.get("status") == "success":
-                return result
-            
-            # If SSL fails, try STARTTLS on port 587
-            logger.info(f"[{trace_id}] SMTP SSL failed, trying STARTTLS (port {self.smtp_port})")
-            result = self.send_email_smtp(to_email, subject, message, trace_id)
-            if result.get("status") == "success":
-                return result
-            
-            logger.warning(f"[{trace_id}] Both SMTP methods failed, trying other methods")
+        # Detect if running on Render (SMTP ports are blocked there)
+        is_cloud = bool(os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") or 
+                       os.getenv("ENVIRONMENT") == "production")
         
-        # Try SendGrid
-        if self.sendgrid_key:
-            logger.info(f"[{trace_id}] Trying SendGrid API")
-            result = self.send_email_sendgrid(to_email, subject, message, trace_id)
-            if result.get("status") == "success":
-                return result
-        
-        # Try Gmail API
-        if self.gmail_token:
-            logger.info(f"[{trace_id}] Trying Gmail API")
-            return self.send_email_gmail_api(to_email, subject, message, trace_id)
+        if is_cloud:
+            # On Render: SMTP is blocked, use HTTP-based APIs only
+            # Priority: Brevo (verified) > SendGrid > Gmail API
+            
+            if self.brevo_key:
+                logger.info(f"[{trace_id}] Cloud env detected, trying Brevo API first")
+                result = self.send_email_brevo(to_email, subject, message, trace_id)
+                if result.get("status") == "success":
+                    return result
+                logger.warning(f"[{trace_id}] Brevo failed: {result.get('error')}")
+            
+            if self.sendgrid_key:
+                logger.info(f"[{trace_id}] Trying SendGrid API")
+                result = self.send_email_sendgrid(to_email, subject, message, trace_id)
+                if result.get("status") == "success":
+                    return result
+                logger.warning(f"[{trace_id}] SendGrid failed: {result.get('error')}")
+            
+            if self.gmail_token:
+                logger.info(f"[{trace_id}] Trying Gmail API")
+                result = self.send_email_gmail_api(to_email, subject, message, trace_id)
+                if result.get("status") == "success":
+                    return result
+        else:
+            # Local: Try Brevo first, then SMTP, then others
+            if self.brevo_key:
+                logger.info(f"[{trace_id}] Trying Brevo API")
+                result = self.send_email_brevo(to_email, subject, message, trace_id)
+                if result.get("status") == "success":
+                    return result
+            
+            if self.email_user and self.email_password:
+                logger.info(f"[{trace_id}] Trying SMTP SSL (port 465)")
+                result = self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+                if result.get("status") == "success":
+                    return result
+                
+                logger.info(f"[{trace_id}] Trying SMTP STARTTLS (port {self.smtp_port})")
+                result = self.send_email_smtp(to_email, subject, message, trace_id)
+                if result.get("status") == "success":
+                    return result
+            
+            if self.sendgrid_key:
+                logger.info(f"[{trace_id}] Trying SendGrid API")
+                result = self.send_email_sendgrid(to_email, subject, message, trace_id)
+                if result.get("status") == "success":
+                    return result
         
         # All methods failed
         return {
             "status": "error",
-            "error": "All email sending methods failed. Check SMTP credentials and SendGrid API key.",
+            "error": "All email sending methods failed. Check Brevo/SendGrid API keys or SMTP credentials.",
             "trace_id": trace_id,
             "timestamp": datetime.utcnow().isoformat()
         }
