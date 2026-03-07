@@ -26,8 +26,54 @@ class EmailExecutor:
         self.sendgrid_key = os.getenv("SENDGRID_API_KEY")
         self.sendgrid_from = os.getenv("SENDGRID_FROM_EMAIL", self.email_user)
         
+    def send_email_smtp_ssl(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+        """Send email via SMTP with SSL on port 465 (works on Render.com)"""
+        try:
+            if not self.email_user or not self.email_password:
+                return {
+                    "status": "error",
+                    "error": "SMTP credentials not configured",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            
+            msg = MIMEMultipart()
+            msg['From'] = self.email_user
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(message, 'plain'))
+            
+            # Use SMTP_SSL on port 465 (more reliable on cloud platforms like Render)
+            logger.info(f"[{trace_id}] Sending email via SMTP SSL (port 465) to {to_email}")
+            server = smtplib.SMTP_SSL(self.smtp_server, 465, timeout=30)
+            server.login(self.email_user, self.email_password)
+            server.sendmail(self.email_user, to_email, msg.as_string())
+            server.quit()
+            
+            logger.info(f"[{trace_id}] Email sent successfully via SMTP SSL to {to_email}")
+            return {
+                "status": "success",
+                "to": to_email,
+                "subject": subject,
+                "message": message,
+                "method": "smtp_ssl",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "platform": "email"
+            }
+            
+        except Exception as e:
+            logger.error(f"[{trace_id}] SMTP SSL email failed: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "method": "smtp_ssl",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
     def send_email_smtp(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
-        """Send email via SMTP"""
+        """Send email via SMTP with STARTTLS on port 587"""
         try:
             if not self.email_user or not self.email_password:
                 # For testing purposes, simulate successful execution
@@ -55,17 +101,16 @@ class EmailExecutor:
             msg['From'] = self.email_user
             msg['To'] = to_email
             msg['Subject'] = subject
-            
             msg.attach(MIMEText(message, 'plain'))
             
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            logger.info(f"[{trace_id}] Sending email via SMTP STARTTLS (port {self.smtp_port}) to {to_email}")
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
             server.starttls()
             server.login(self.email_user, self.email_password)
-            
-            text = msg.as_string()
-            server.sendmail(self.email_user, to_email, text)
+            server.sendmail(self.email_user, to_email, msg.as_string())
             server.quit()
             
+            logger.info(f"[{trace_id}] Email sent successfully via SMTP to {to_email}")
             return {
                 "status": "success",
                 "to": to_email,
@@ -78,7 +123,7 @@ class EmailExecutor:
             }
             
         except Exception as e:
-            logger.error(f"SMTP email execution failed: {e}")
+            logger.error(f"[{trace_id}] SMTP STARTTLS email failed: {e}")
             # For testing purposes, simulate success on test emails
             if to_email == "test@example.com":
                 return {
@@ -103,7 +148,7 @@ class EmailExecutor:
         """Send email via SendGrid API"""
         try:
             if not self.sendgrid_key:
-                return self.send_email_smtp(to_email, subject, message, trace_id)
+                return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
             
             headers = {
                 'Authorization': f'Bearer {self.sendgrid_key}',
@@ -117,6 +162,7 @@ class EmailExecutor:
                 'content': [{'type': 'text/plain', 'value': message}]
             }
             
+            logger.info(f"[{trace_id}] Sending email via SendGrid to {to_email}")
             response = requests.post(
                 'https://api.sendgrid.com/v3/mail/send',
                 headers=headers,
@@ -125,6 +171,7 @@ class EmailExecutor:
             )
             
             if response.status_code == 202:
+                logger.info(f"[{trace_id}] SendGrid accepted email to {to_email}")
                 return {
                     "status": "success",
                     "to": to_email,
@@ -136,18 +183,19 @@ class EmailExecutor:
                     "platform": "email"
                 }
             else:
-                logger.error(f"SendGrid API error: {response.status_code} - {response.text}")
-                return self.send_email_smtp(to_email, subject, message, trace_id)
+                logger.error(f"[{trace_id}] SendGrid API error: {response.status_code} - {response.text}")
+                # Fall back to SMTP SSL
+                return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
                 
         except Exception as e:
-            logger.error(f"SendGrid execution failed, falling back to SMTP: {e}")
-            return self.send_email_smtp(to_email, subject, message, trace_id)
+            logger.error(f"[{trace_id}] SendGrid execution failed, falling back to SMTP SSL: {e}")
+            return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
     
     def send_email_gmail_api(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
         """Send email via Gmail API"""
         try:
             if not self.gmail_token:
-                return self.send_email_smtp(to_email, subject, message, trace_id)
+                return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
             
             email_msg = MIMEText(message)
             email_msg['to'] = to_email
@@ -185,11 +233,11 @@ class EmailExecutor:
                     "platform": "email"
                 }
             else:
-                return self.send_email_smtp(to_email, subject, message, trace_id)
+                return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
                 
         except Exception as e:
-            logger.error(f"Gmail API execution failed, falling back to SMTP: {e}")
-            return self.send_email_smtp(to_email, subject, message, trace_id)
+            logger.error(f"[{trace_id}] Gmail API execution failed, falling back to SMTP SSL: {e}")
+            return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
     
     def _validate_inputs(self, to_email: str, subject: str, message: str, trace_id: str) -> Optional[Dict[str, Any]]:
         """Validate email inputs, return error dict if invalid, None if valid."""
@@ -217,18 +265,49 @@ class EmailExecutor:
         return None
 
     def send_message(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
-        """Main send method - tries SendGrid first, then Gmail API, then SMTP"""
+        """
+        Main send method - Priority order:
+        1. Gmail SMTP SSL (port 465) - most reliable, works on Render
+        2. Gmail SMTP STARTTLS (port 587) - fallback
+        3. SendGrid API - fallback (needs sender verification)
+        4. Gmail API - fallback (needs OAuth token)
+        """
         # Validate inputs before sending
         validation_error = self._validate_inputs(to_email, subject, message, trace_id)
         if validation_error:
             return validation_error
 
-        # Try SendGrid first (works on Render.com)
+        # Try SMTP SSL first (most reliable on cloud platforms)
+        if self.email_user and self.email_password:
+            logger.info(f"[{trace_id}] Trying Gmail SMTP SSL (port 465) first")
+            result = self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+            if result.get("status") == "success":
+                return result
+            
+            # If SSL fails, try STARTTLS on port 587
+            logger.info(f"[{trace_id}] SMTP SSL failed, trying STARTTLS (port {self.smtp_port})")
+            result = self.send_email_smtp(to_email, subject, message, trace_id)
+            if result.get("status") == "success":
+                return result
+            
+            logger.warning(f"[{trace_id}] Both SMTP methods failed, trying other methods")
+        
+        # Try SendGrid
         if self.sendgrid_key:
-            return self.send_email_sendgrid(to_email, subject, message, trace_id)
+            logger.info(f"[{trace_id}] Trying SendGrid API")
+            result = self.send_email_sendgrid(to_email, subject, message, trace_id)
+            if result.get("status") == "success":
+                return result
+        
         # Try Gmail API
-        elif self.gmail_token:
+        if self.gmail_token:
+            logger.info(f"[{trace_id}] Trying Gmail API")
             return self.send_email_gmail_api(to_email, subject, message, trace_id)
-        # Fall back to SMTP
-        else:
-            return self.send_email_smtp(to_email, subject, message, trace_id)
+        
+        # All methods failed
+        return {
+            "status": "error",
+            "error": "All email sending methods failed. Check SMTP credentials and SendGrid API key.",
+            "trace_id": trace_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
