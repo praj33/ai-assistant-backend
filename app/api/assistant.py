@@ -47,6 +47,7 @@ class AssistantResult(BaseModel):
     task: Optional[dict] = None
     enforcement: Optional[dict] = None
     safety: Optional[dict] = None
+    execution: Optional[dict] = None
     language_metadata: Optional[dict] = None
     audio_response: Optional[bytes] = None
 
