@@ -1,21 +1,41 @@
 {
-  "test": "reminder_execution",
-  "executor": "ReminderExecutor",
-  "methods": [
-    "create_reminder",
-    "list_reminders",
-    "cancel_reminder"
-  ],
+  "test": "reminder_scheduler_execution",
+  "flow": "Scheduler -> Safety -> Enforcement -> ExecutionService -> ReminderExecutor",
   "enforcement_gated": true,
-  "result": {
+  "created": {
     "status": "success",
     "action": "create_reminder",
-    "reminder_id": "rem_d14e25ba0c6d",
+    "reminder_id": "rem_bd5f6fab8df7",
     "message": "Call mom",
-    "remind_at": "2026-03-07T11:28:25.860945",
+    "remind_at": "2026-03-09T07:34:08.082256",
     "method": "reminder_service",
     "trace_id": "test_trace_003",
-    "timestamp": "2026-03-07T10:28:25.861944",
+    "timestamp": "2026-03-09T07:34:07.082256",
     "platform": "reminder"
-  }
+  },
+  "scheduler_tick": {
+    "status": "ok",
+    "due": 1,
+    "deliveries": [
+      {
+        "trace_id": "trace_0a358f9bf4f4",
+        "reminder_id": "rem_bd5f6fab8df7",
+        "decision": "ALLOW",
+        "delivery": {
+          "status": "success",
+          "action": "deliver_reminder",
+          "reminder_id": "rem_bd5f6fab8df7",
+          "message": "Call mom",
+          "remind_at": "2026-03-09T07:34:08.082256",
+          "user_id": "proof_user",
+          "method": "reminder_scheduler",
+          "trace_id": "trace_0a358f9bf4f4",
+          "timestamp": "2026-03-09T07:34:12.016441",
+          "platform": "reminder"
+        }
+      }
+    ],
+    "timestamp": "2026-03-09T07:34:12.016441"
+  },
+  "timestamp": "2026-03-09T07:34:13.786245"
 }

@@ -1,20 +1,13 @@
 """Universal Execution Gateway — Verification Test"""
 import sys, json, os
+import time
+from datetime import datetime, timedelta
 sys.path.insert(0, '.')
 from dotenv import load_dotenv
 load_dotenv()
 
-# Test all executor imports
-from app.executors.telegram_executor import TelegramExecutor
-from app.executors.calendar_executor import CalendarExecutor
-from app.executors.reminder_executor import ReminderExecutor
-from app.executors.ems_executor import EMSExecutor
-from app.executors.device_gateway_executor import DeviceGatewayExecutor
-from app.executors.email_executor import EmailExecutor
-from app.executors.whatsapp_executor import WhatsAppExecutor
-from app.executors.instagram_executor import InstagramExecutor
-
-print("=== ALL EXECUTORS IMPORTED SUCCESSFULLY ===")
+# Deterministic proofs by default (force simulation adapters).
+os.environ.setdefault("EXECUTION_SIMULATION", "1")
 
 # Test ExecutionService (Universal Gateway)
 from app.services.execution_service import ExecutionService
@@ -24,46 +17,88 @@ print("Gateway status:", json.dumps(status, indent=2))
 
 results = {}
 
-# Test Telegram
-t = TelegramExecutor()
-r = t.send_message("12345", "Hello from gateway", "test_trace_001")
-results["telegram"] = r
-print("Telegram:", r["status"])
+# Test actions ONLY through the universal gateway (no direct executor calls)
+results["telegram"] = gateway.execute_action(
+    "telegram",
+    {"to": "12345", "message": "Hello from gateway"},
+    "test_trace_001",
+    "ALLOW",
+)
+print("Telegram:", results["telegram"].get("status"))
 
-# Test Calendar
-c = CalendarExecutor()
-r = c.create_event("Team Meeting", "2026-03-08T15:00:00", trace_id="test_trace_002")
-results["calendar"] = r
-print("Calendar:", r["status"])
+results["calendar"] = gateway.execute_action(
+    "calendar",
+    {"action": "create_event", "title": "Team Meeting", "start_time": "2026-03-08T15:00:00"},
+    "test_trace_002",
+    "ALLOW",
+)
+print("Calendar:", results["calendar"].get("status"))
 
-# Test Reminder
-rem = ReminderExecutor()
-r = rem.create_reminder("Call mom", trace_id="test_trace_003")
-results["reminder"] = r
-print("Reminder:", r["status"])
+results["reminder"] = gateway.execute_action(
+    "reminder",
+    {"action": "create_reminder", "message": "Call mom", "remind_at": (datetime.utcnow() + timedelta(seconds=1)).isoformat(), "user_id": "proof_user"},
+    "test_trace_003",
+    "ALLOW",
+)
+print("Reminder:", results["reminder"].get("status"))
 
-# Test EMS
-e = EMSExecutor()
-r = e.create_task("Fix bug #42", "Fix the login issue", priority="high", trace_id="test_trace_004")
-results["ems"] = r
-print("EMS:", r["status"])
+# Auto-execution proof for reminders (Day 2B)
+time.sleep(2)
+from app.services.reminder_scheduler import ReminderScheduler, SchedulerConfig
+_scheduler = ReminderScheduler(SchedulerConfig(poll_interval_seconds=0.1, max_batch=10))
+reminder_tick = __import__("asyncio").run(_scheduler.tick())
 
-# Test Device Gateway
-d = DeviceGatewayExecutor()
-r = d.send_command("dev_001", "desktop", "open_browser", trace_id="test_trace_005")
-results["device_gateway"] = r
-print("Device:", r["status"])
+results["ems"] = gateway.execute_action(
+    "ems",
+    {"action": "create_task", "title": "Fix bug #42", "description": "Fix the login issue", "priority": "high"},
+    "test_trace_004",
+    "ALLOW",
+)
+print("EMS:", results["ems"].get("status"))
+
+results["device_gateway"] = gateway.execute_action(
+    "device_gateway",
+    {"action": "send_command", "device_id": "dev_001", "device_type": "desktop", "command": "open_browser", "payload": {}},
+    "test_trace_005",
+    "ALLOW",
+)
+print("Device:", results["device_gateway"].get("status"))
 
 # Test enforcement gating (should BLOCK)
 blocked = gateway.execute_action("telegram", {"to": "123", "message": "test"}, "trace_block_001", "BLOCK")
 print("Enforcement BLOCK test:", blocked["status"])
 
+# Test direct executor bypass attempt (should be unauthorized)
+from app.executors.telegram_executor import TelegramExecutor
+bypass_attempt = TelegramExecutor().send_message("12345", "bypass", "trace_bypass_001")
+print("Direct executor bypass test:", bypass_attempt.get("status"), bypass_attempt.get("error"))
+
+# Inbound Telegram webhook proof (runs full spine wiring)
+try:
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+    inbound_payload = {
+        "update_id": 1,
+        "message": {
+            "message_id": 1,
+            "from": {"id": 222, "username": "test_user", "language_code": "en"},
+            "chat": {"id": 111, "type": "private"},
+            "date": 0,
+            "text": "hello"
+        }
+    }
+    inbound_resp = client.post("/webhook/telegram", json=inbound_payload)
+    inbound_json = inbound_resp.json()
+except Exception as e:
+    inbound_json = {"status": "error", "error": str(e)}
+
 # Generate proof files
 proofs = {
     "telegram_execution_proof.json": {
         "test": "telegram_execution",
-        "executor": "TelegramExecutor",
-        "method": "send_message",
+        "executor": "ExecutionService -> TelegramExecutor",
+        "method": "execute_action(send_message)",
         "enforcement_gated": True,
         "result": results["telegram"]
     },
@@ -76,28 +111,29 @@ proofs = {
     },
     "calendar_execution_proof.json": {
         "test": "calendar_execution",
-        "executor": "CalendarExecutor",
+        "executor": "ExecutionService -> CalendarExecutor",
         "methods": ["create_event", "update_event", "delete_event", "list_events"],
         "enforcement_gated": True,
         "result": results["calendar"]
     },
     "reminder_execution_trace.json": {
-        "test": "reminder_execution",
-        "executor": "ReminderExecutor",
-        "methods": ["create_reminder", "list_reminders", "cancel_reminder"],
+        "test": "reminder_scheduler_execution",
+        "flow": "Scheduler -> Safety -> Enforcement -> ExecutionService -> ReminderExecutor",
         "enforcement_gated": True,
-        "result": results["reminder"]
+        "created": results["reminder"],
+        "scheduler_tick": reminder_tick,
+        "timestamp": datetime.utcnow().isoformat(),
     },
     "ems_execution_proof.json": {
         "test": "ems_execution",
-        "executor": "EMSExecutor",
+        "executor": "ExecutionService -> EMSExecutor",
         "methods": ["create_task", "assign_task", "update_task"],
         "enforcement_gated": True,
         "result": results["ems"]
     },
     "device_gateway_proof.json": {
         "test": "device_gateway",
-        "executor": "DeviceGatewayExecutor",
+        "executor": "ExecutionService -> DeviceGatewayExecutor",
         "supported_devices": ["desktop", "mobile", "tablet", "xr"],
         "gateway_only": True,
         "enforcement_gated": True,
@@ -108,7 +144,7 @@ proofs = {
         "webhook_endpoint": "/webhook/telegram",
         "flow": "Inbound -> Safety -> Intelligence -> Enforcement -> Orchestration",
         "enforcement_gated": True,
-        "result": {"status": "success", "note": "Webhook handler registered"}
+        "result": inbound_json
     }
 }
 

@@ -11,6 +11,8 @@ from typing import Dict, Any
 from datetime import datetime
 import logging
 
+from app.core.gateway_auth import GatewayAuthError, require_gateway_invocation
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,10 +21,27 @@ class TelegramExecutor:
         self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}" if self.bot_token else None
 
-    def send_message(self, to_chat_id: str, message: str, trace_id: str) -> Dict[str, Any]:
+    def send_message(self, to_chat_id: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """Send a message via Telegram Bot API."""
         try:
-            if not self.bot_token:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="telegram",
+                    action="send_message",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "telegram",
+                }
+
+            force_sim = os.getenv("EXECUTION_SIMULATION", "").lower() in {"1", "true", "yes"}
+            if force_sim or not self.bot_token:
                 # Simulation mode — token not configured yet
                 logger.info(f"[{trace_id}] Telegram simulation: sending to {to_chat_id}")
                 return {

@@ -49,43 +49,24 @@ for text in test_messages:
 
 # 3. Test actual executor
 print("\n--- EXECUTOR TEST ---")
-from app.executors.email_executor import EmailExecutor
-executor = EmailExecutor()
-print(f"  SMTP: {executor.smtp_server}:{executor.smtp_port}")
-print(f"  User: {executor.email_user}")
-print(f"  Pass set: {bool(executor.email_password)}")
-print(f"  SendGrid key set: {bool(executor.sendgrid_key)}")
+from app.services.execution_service import ExecutionService
+gateway = ExecutionService()
 
-# 4. Test SendGrid specifically
-if executor.sendgrid_key:
-    print("\n--- SENDGRID TEST ---")
-    result = executor.send_email_sendgrid(
-        to_email="blackholeinfiverse20@gmail.com",
-        subject="Debug Test",
-        message="Debug test email",
-        trace_id="debug_test"
-    )
-    print(f"  SendGrid result: {result}")
+print("  Gateway status OK:", gateway.get_status().get("status"))
 
-# 5. Test SMTP specifically
-print("\n--- SMTP TEST ---")
-result = executor.send_email_smtp(
-    to_email="blackholeinfiverse20@gmail.com",
-    subject="Debug Test SMTP",
-    message="Debug test email via SMTP",
-    trace_id="debug_smtp_test"
+# 4. Test email send through the universal gateway
+print("\n--- GATEWAY EMAIL TEST (ALLOW) ---")
+result = gateway.execute_action(
+    action_type="email",
+    action_data={
+        "to": "blackholeinfiverse20@gmail.com",
+        "subject": "Debug Full Test",
+        "message": "Debug full test email (must pass gateway auth + enforcement).",
+    },
+    trace_id="debug_full_test",
+    enforcement_decision="ALLOW",
 )
-print(f"  SMTP result: {result}")
-
-# 6. Test full send_message (which tries SendGrid -> Gmail API -> SMTP)
-print("\n--- FULL send_message() TEST ---")
-result = executor.send_message(
-    to_email="blackholeinfiverse20@gmail.com",
-    subject="Debug Full Test",
-    message="Debug full test email",
-    trace_id="debug_full_test"
-)
-print(f"  Full result: {result}")
+print(f"  Gateway result: {result}")
 
 print("\n" + "=" * 60)
 print("DONE")

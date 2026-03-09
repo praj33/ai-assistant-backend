@@ -12,6 +12,8 @@ from datetime import datetime
 import logging
 import uuid
 
+from app.core.gateway_auth import GatewayAuthError, require_gateway_invocation
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,9 +26,25 @@ class EMSExecutor:
         return bool(self.ems_api_url and self.ems_api_key)
 
     def create_task(self, title: str, description: str = "", priority: str = "medium",
-                    assignee: str = "", trace_id: str = "") -> Dict[str, Any]:
+                    assignee: str = "", trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """Create an EMS task."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="ems",
+                    action="create_task",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "ems",
+                }
+
             task_id = f"ems_task_{uuid.uuid4().hex[:12]}"
             task_data = {
                 "task_id": task_id,
@@ -34,7 +52,7 @@ class EMSExecutor:
                 "description": description,
                 "priority": priority,
                 "assignee": assignee,
-                "status": "created",
+                "task_status": "created",
                 "created_at": datetime.utcnow().isoformat()
             }
 
@@ -69,9 +87,25 @@ class EMSExecutor:
             return {"status": "error", "error": str(e), "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat()}
 
-    def assign_task(self, task_id: str, assignee: str, trace_id: str = "") -> Dict[str, Any]:
+    def assign_task(self, task_id: str, assignee: str, trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """Assign an EMS task to a user."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="ems",
+                    action="assign_task",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "ems",
+                }
+
             if not self._is_configured():
                 logger.info(f"[{trace_id}] EMS simulation: assigning {task_id} to {assignee}")
                 return {
@@ -103,9 +137,25 @@ class EMSExecutor:
             return {"status": "error", "error": str(e), "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat()}
 
-    def update_task(self, task_id: str, updates: Dict[str, Any], trace_id: str = "") -> Dict[str, Any]:
+    def update_task(self, task_id: str, updates: Dict[str, Any], trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """Update an EMS task."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="ems",
+                    action="update_task",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "ems",
+                }
+
             if not self._is_configured():
                 logger.info(f"[{trace_id}] EMS simulation: updating task {task_id}")
                 return {

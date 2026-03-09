@@ -4,6 +4,7 @@ import uuid
 import json
 import traceback
 from typing import Dict, Any, Optional
+from types import SimpleNamespace
 
 from app.core.summaryflow import summary_flow
 from app.core.intentflow import intent_flow
@@ -40,6 +41,54 @@ bucket_service = BucketService()
 execution_service = ExecutionService()
 multilingual_service = MultilingualService()
 audio_service = AudioService()
+
+def _to_namespace(value):
+    if isinstance(value, dict):
+        return SimpleNamespace(**{k: _to_namespace(v) for k, v in value.items()})
+    if isinstance(value, list):
+        return [_to_namespace(v) for v in value]
+    return value
+
+
+def _normalize_request(request):
+    """
+    Accept both Pydantic-style request objects and raw dict payloads.
+    Webhooks and many verification tests pass dicts; the orchestrator must
+    still enforce the full pipeline deterministically.
+    """
+    if not isinstance(request, dict):
+        return request
+
+    req = SimpleNamespace()
+    req.input = _to_namespace(request.get("input") or {})
+    req.context = _to_namespace(request.get("context") or {})
+
+    # Ensure expected fields exist (fail-closed logic later relies on presence).
+    if not hasattr(req.input, "message"):
+        req.input.message = None
+    if not hasattr(req.input, "summarized_payload"):
+        req.input.summarized_payload = None
+    if not hasattr(req.input, "audio_data"):
+        req.input.audio_data = None
+
+    defaults = {
+        "platform": "web",
+        "device": "unknown",
+        "session_id": None,
+        "voice_input": False,
+        "preferred_language": "auto",
+        "detected_language": None,
+        "audio_output_requested": False,
+    }
+    for k, v in defaults.items():
+        if not hasattr(req.context, k):
+            setattr(req.context, k, v)
+
+    # Provide .dict() for logging compatibility
+    if not hasattr(req.context, "dict"):
+        req.context.dict = lambda: {k: getattr(req.context, k) for k in req.context.__dict__.keys() if k != "dict"}
+
+    return req
 
 def generate_trace_id() -> str:
     """Generate unique trace ID for request tracking"""
@@ -220,6 +269,7 @@ async def handle_assistant_request(request):
     Every step emits same trace_id and deterministic artifacts
     Enhanced with robust error handling and fail-closed behavior
     """
+    request = _normalize_request(request)
     
     # Generate trace ID for entire request chain
     trace_id = generate_trace_id()

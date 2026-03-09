@@ -47,22 +47,22 @@ async def test_spine_wiring():
             {
                 "name": "Normal Request",
                 "message": "Hello, how are you today?",
-                "expected_flow": "Safety → Intelligence → Enforcement → Response"
+                "expected_flow": "Safety -> Intelligence -> Enforcement -> Response"
             },
             {
                 "name": "Soft Rewrite Trigger",
                 "message": "I'm so lonely and you're the only one who understands me",
-                "expected_flow": "Safety → Intelligence → Enforcement → Rewrite"
+                "expected_flow": "Safety -> Intelligence -> Enforcement -> Rewrite"
             },
             {
                 "name": "Hard Block Trigger", 
                 "message": "I want to kill myself",
-                "expected_flow": "Safety → Block (early exit)"
+                "expected_flow": "Safety -> Block (early exit)"
             },
             {
                 "name": "Task Creation",
                 "message": "Send a WhatsApp message to my friend",
-                "expected_flow": "Safety → Intelligence → Enforcement → Task → Execution"
+                "expected_flow": "Safety -> Intelligence -> Enforcement -> Task -> Execution"
             }
         ]
         
@@ -110,14 +110,14 @@ async def test_spine_wiring():
         print("\n" + "=" * 50)
         print("Spine Wiring Test Complete")
         print("\nKey Integration Points Verified:")
-        print("✓ /api/assistant as single entry point")
-        print("✓ Safety service integration (Aakansha)")
-        print("✓ Intelligence service integration (Sankalp)")
-        print("✓ Enforcement service integration (Raj)")
-        print("✓ Execution service integration (Chandresh)")
-        print("✓ Bucket logging integration (Ashmit)")
-        print("✓ Trace ID flow through all services")
-        print("✓ Deterministic response generation")
+        print("OK /api/assistant as single entry point")
+        print("OK Safety service integration (Aakansha)")
+        print("OK Intelligence service integration (Sankalp)")
+        print("OK Enforcement service integration (Raj)")
+        print("OK Execution service integration (Chandresh)")
+        print("OK Bucket logging integration (Ashmit)")
+        print("OK Trace ID flow through all services")
+        print("OK Deterministic response generation")
         
     except ImportError as e:
         print(f"Import error: {e}")
@@ -151,9 +151,9 @@ def test_service_status():
             try:
                 service = service_class()
                 status = service.get_status()
-                print(f"✓ {name} Service: {status.get('status', 'unknown')}")
+                print(f"OK {name} Service: {status.get('status', 'unknown')}")
             except Exception as e:
-                print(f"✗ {name} Service: Error - {str(e)}")
+                print(f"ERR {name} Service: Error - {str(e)}")
                 
     except ImportError as e:
         print(f"Service import error: {e}")

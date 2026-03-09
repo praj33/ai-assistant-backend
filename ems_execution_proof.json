@@ -1,6 +1,6 @@
 {
   "test": "ems_execution",
-  "executor": "EMSExecutor",
+  "executor": "ExecutionService -> EMSExecutor",
   "methods": [
     "create_task",
     "assign_task",
@@ -8,17 +8,18 @@
   ],
   "enforcement_gated": true,
   "result": {
-    "status": "created",
+    "status": "success",
     "action": "create_task",
-    "task_id": "ems_task_2ffb3875af55",
+    "task_id": "ems_task_08dae268dedc",
     "title": "Fix bug #42",
     "description": "Fix the login issue",
     "priority": "high",
     "assignee": "",
-    "created_at": "2026-03-07T10:28:25.861944",
+    "task_status": "created",
+    "created_at": "2026-03-09T07:34:12.016441",
     "method": "ems_simulation",
     "trace_id": "test_trace_004",
-    "timestamp": "2026-03-07T10:28:25.861944",
+    "timestamp": "2026-03-09T07:34:12.017442",
     "platform": "ems",
     "note": "Simulation mode \u2014 set EMS_API_URL for live execution"
   }

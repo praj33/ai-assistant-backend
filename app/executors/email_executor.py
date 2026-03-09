@@ -10,6 +10,8 @@ import logging
 import base64
 import json
 
+from app.core.gateway_auth import GatewayAuthError, require_gateway_invocation
+
 logger = logging.getLogger(__name__)
 
 EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
@@ -29,10 +31,23 @@ class EmailExecutor:
         self.brevo_key = os.getenv("BREVO_API_KEY")
         self.brevo_from = os.getenv("BREVO_FROM_EMAIL", self.email_user)
         self.brevo_from_name = os.getenv("BREVO_FROM_NAME", "AI Assistant")
+    
+    def _require_gateway(self, trace_id: str, gateway_auth: str):
+        require_gateway_invocation(
+            gateway_auth=gateway_auth,
+            trace_id=trace_id,
+            platform="email",
+            action="send_message",
+        )
         
-    def send_email_brevo(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+    def send_email_brevo(self, to_email: str, subject: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """Send email via Brevo (Sendinblue) HTTP API - works on Render"""
         try:
+            try:
+                self._require_gateway(trace_id, gateway_auth)
+            except GatewayAuthError as e:
+                return {"status": "error", "error": f"unauthorized: {str(e)}", "trace_id": trace_id, "timestamp": datetime.utcnow().isoformat(), "platform": "email"}
+
             if not self.brevo_key:
                 return {
                     "status": "error",
@@ -98,9 +113,14 @@ class EmailExecutor:
                 "timestamp": datetime.utcnow().isoformat()
             }
         
-    def send_email_smtp_ssl(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+    def send_email_smtp_ssl(self, to_email: str, subject: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """Send email via SMTP with SSL on port 465 (works on Render.com)"""
         try:
+            try:
+                self._require_gateway(trace_id, gateway_auth)
+            except GatewayAuthError as e:
+                return {"status": "error", "error": f"unauthorized: {str(e)}", "trace_id": trace_id, "timestamp": datetime.utcnow().isoformat(), "platform": "email"}
+
             if not self.email_user or not self.email_password:
                 return {
                     "status": "error",
@@ -144,9 +164,14 @@ class EmailExecutor:
                 "timestamp": datetime.utcnow().isoformat()
             }
 
-    def send_email_smtp(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+    def send_email_smtp(self, to_email: str, subject: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """Send email via SMTP with STARTTLS on port 587"""
         try:
+            try:
+                self._require_gateway(trace_id, gateway_auth)
+            except GatewayAuthError as e:
+                return {"status": "error", "error": f"unauthorized: {str(e)}", "trace_id": trace_id, "timestamp": datetime.utcnow().isoformat(), "platform": "email"}
+
             if not self.email_user or not self.email_password:
                 # For testing purposes, simulate successful execution
                 if self.email_user == "test@example.com" or to_email == "test@example.com":
@@ -216,11 +241,16 @@ class EmailExecutor:
                 "timestamp": datetime.utcnow().isoformat()
             }
     
-    def send_email_sendgrid(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+    def send_email_sendgrid(self, to_email: str, subject: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """Send email via SendGrid API"""
         try:
+            try:
+                self._require_gateway(trace_id, gateway_auth)
+            except GatewayAuthError as e:
+                return {"status": "error", "error": f"unauthorized: {str(e)}", "trace_id": trace_id, "timestamp": datetime.utcnow().isoformat(), "platform": "email"}
+
             if not self.sendgrid_key:
-                return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+                return self.send_email_smtp_ssl(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
             
             headers = {
                 'Authorization': f'Bearer {self.sendgrid_key}',
@@ -257,17 +287,22 @@ class EmailExecutor:
             else:
                 logger.error(f"[{trace_id}] SendGrid API error: {response.status_code} - {response.text}")
                 # Fall back to SMTP SSL
-                return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+                return self.send_email_smtp_ssl(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 
         except Exception as e:
             logger.error(f"[{trace_id}] SendGrid execution failed, falling back to SMTP SSL: {e}")
-            return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+            return self.send_email_smtp_ssl(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
     
-    def send_email_gmail_api(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+    def send_email_gmail_api(self, to_email: str, subject: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """Send email via Gmail API"""
         try:
+            try:
+                self._require_gateway(trace_id, gateway_auth)
+            except GatewayAuthError as e:
+                return {"status": "error", "error": f"unauthorized: {str(e)}", "trace_id": trace_id, "timestamp": datetime.utcnow().isoformat(), "platform": "email"}
+
             if not self.gmail_token:
-                return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+                return self.send_email_smtp_ssl(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
             
             email_msg = MIMEText(message)
             email_msg['to'] = to_email
@@ -305,11 +340,11 @@ class EmailExecutor:
                     "platform": "email"
                 }
             else:
-                return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+                return self.send_email_smtp_ssl(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 
         except Exception as e:
             logger.error(f"[{trace_id}] Gmail API execution failed, falling back to SMTP SSL: {e}")
-            return self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+            return self.send_email_smtp_ssl(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
     
     def _validate_inputs(self, to_email: str, subject: str, message: str, trace_id: str) -> Optional[Dict[str, Any]]:
         """Validate email inputs, return error dict if invalid, None if valid."""
@@ -336,12 +371,38 @@ class EmailExecutor:
             }
         return None
 
-    def send_message(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
+    def send_message(self, to_email: str, subject: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """
         Main send method - Auto-detects environment:
         - On Render/cloud: SendGrid API first (SMTP ports are blocked)
         - Locally: SMTP SSL first (most reliable for actual delivery)
         """
+        try:
+            self._require_gateway(trace_id, gateway_auth)
+        except GatewayAuthError as e:
+            return {
+                "status": "error",
+                "error": f"unauthorized: {str(e)}",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "platform": "email",
+            }
+
+        force_sim = os.getenv("EXECUTION_SIMULATION", "").lower() in {"1", "true", "yes"}
+        if force_sim:
+            # Deterministic demo/testing mode (still gateway-authenticated)
+            return {
+                "status": "success",
+                "to": to_email,
+                "subject": subject,
+                "message": message,
+                "method": "email_simulation",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "platform": "email",
+                "note": "Simulation mode — set EXECUTION_SIMULATION=0 and configure BREVO/SENDGRID/SMTP to send live email",
+            }
+
         # Validate inputs before sending
         validation_error = self._validate_inputs(to_email, subject, message, trace_id)
         if validation_error:
@@ -357,45 +418,45 @@ class EmailExecutor:
             
             if self.brevo_key:
                 logger.info(f"[{trace_id}] Cloud env detected, trying Brevo API first")
-                result = self.send_email_brevo(to_email, subject, message, trace_id)
+                result = self.send_email_brevo(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 if result.get("status") == "success":
                     return result
                 logger.warning(f"[{trace_id}] Brevo failed: {result.get('error')}")
             
             if self.sendgrid_key:
                 logger.info(f"[{trace_id}] Trying SendGrid API")
-                result = self.send_email_sendgrid(to_email, subject, message, trace_id)
+                result = self.send_email_sendgrid(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 if result.get("status") == "success":
                     return result
                 logger.warning(f"[{trace_id}] SendGrid failed: {result.get('error')}")
             
             if self.gmail_token:
                 logger.info(f"[{trace_id}] Trying Gmail API")
-                result = self.send_email_gmail_api(to_email, subject, message, trace_id)
+                result = self.send_email_gmail_api(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 if result.get("status") == "success":
                     return result
         else:
             # Local: Try Brevo first, then SMTP, then others
             if self.brevo_key:
                 logger.info(f"[{trace_id}] Trying Brevo API")
-                result = self.send_email_brevo(to_email, subject, message, trace_id)
+                result = self.send_email_brevo(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 if result.get("status") == "success":
                     return result
             
             if self.email_user and self.email_password:
                 logger.info(f"[{trace_id}] Trying SMTP SSL (port 465)")
-                result = self.send_email_smtp_ssl(to_email, subject, message, trace_id)
+                result = self.send_email_smtp_ssl(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 if result.get("status") == "success":
                     return result
                 
                 logger.info(f"[{trace_id}] Trying SMTP STARTTLS (port {self.smtp_port})")
-                result = self.send_email_smtp(to_email, subject, message, trace_id)
+                result = self.send_email_smtp(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 if result.get("status") == "success":
                     return result
             
             if self.sendgrid_key:
                 logger.info(f"[{trace_id}] Trying SendGrid API")
-                result = self.send_email_sendgrid(to_email, subject, message, trace_id)
+                result = self.send_email_sendgrid(to_email, subject, message, trace_id, gateway_auth=gateway_auth)
                 if result.get("status") == "success":
                     return result
         

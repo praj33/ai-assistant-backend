@@ -4,7 +4,8 @@
   "flow": "Inbound -> Safety -> Intelligence -> Enforcement -> Orchestration",
   "enforcement_gated": true,
   "result": {
-    "status": "success",
-    "note": "Webhook handler registered"
+    "status": "processed",
+    "trace_id": "trace_397742f53110",
+    "processed_at": "2026-03-09T07:34:13.783245"
   }
 }

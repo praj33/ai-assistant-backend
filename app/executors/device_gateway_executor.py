@@ -11,6 +11,8 @@ from datetime import datetime
 import logging
 import uuid
 
+from app.core.gateway_auth import GatewayAuthError, require_gateway_invocation
+
 logger = logging.getLogger(__name__)
 
 SUPPORTED_DEVICE_TYPES = ["desktop", "mobile", "tablet", "xr"]
@@ -22,9 +24,25 @@ class DeviceGatewayExecutor:
         self.connected_devices = {}
 
     def send_command(self, device_id: str, device_type: str, command: str,
-                     payload: Dict[str, Any] = None, trace_id: str = "") -> Dict[str, Any]:
+                     payload: Dict[str, Any] = None, trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """Send a command to a device via the gateway."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="device_gateway",
+                    action="send_command",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "device_gateway",
+                }
+
             if device_type.lower() not in SUPPORTED_DEVICE_TYPES:
                 return {
                     "status": "error",
@@ -40,7 +58,7 @@ class DeviceGatewayExecutor:
                 "device_type": device_type,
                 "command": command,
                 "payload": payload or {},
-                "status": "queued",
+                "command_status": "queued",
                 "gateway_id": self.gateway_id
             }
 
@@ -63,9 +81,25 @@ class DeviceGatewayExecutor:
                     "timestamp": datetime.utcnow().isoformat()}
 
     def register_device(self, device_id: str, device_type: str, device_name: str = "",
-                        trace_id: str = "") -> Dict[str, Any]:
+                        trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """Register a device with the gateway."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="device_gateway",
+                    action="register_device",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "device_gateway",
+                }
+
             if device_type.lower() not in SUPPORTED_DEVICE_TYPES:
                 return {
                     "status": "error",
@@ -95,8 +129,24 @@ class DeviceGatewayExecutor:
             return {"status": "error", "error": str(e), "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat()}
 
-    def list_devices(self, trace_id: str = "") -> Dict[str, Any]:
+    def list_devices(self, trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """List all registered devices."""
+        try:
+            require_gateway_invocation(
+                gateway_auth=gateway_auth,
+                trace_id=trace_id,
+                platform="device_gateway",
+                action="list_devices",
+            )
+        except GatewayAuthError as e:
+            return {
+                "status": "error",
+                "error": f"unauthorized: {str(e)}",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "platform": "device_gateway",
+            }
+
         return {
             "status": "success", "action": "list_devices",
             "devices": list(self.connected_devices.values()),

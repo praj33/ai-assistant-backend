@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.executors.whatsapp_executor import WhatsAppExecutor
+from app.services.execution_service import ExecutionService
 
 load_dotenv()
 
@@ -38,14 +38,18 @@ print(f"\n[WHATSAPP] Sending test message to: {test_number}")
 print("\nIMPORTANT: Recipient must join Twilio sandbox first!")
 print("Send 'join <code>' to +1 415 523 8886 from WhatsApp")
 
-# Initialize executor
-executor = WhatsAppExecutor()
+# Initialize gateway (must go through Universal Execution Gateway)
+gateway = ExecutionService()
 
 # Send test message
-result = executor.send_message(
-    to_number=test_number,
-    message="This is a test message from AI Assistant. If you receive this, WhatsApp execution is working!",
-    trace_id="test_trace_whatsapp_001"
+result = gateway.execute_action(
+    action_type="whatsapp",
+    action_data={
+        "to": test_number,
+        "message": "This is a test message from AI Assistant. If you receive this, WhatsApp execution is working!",
+    },
+    trace_id="test_trace_whatsapp_001",
+    enforcement_decision="ALLOW",
 )
 
 print("\n" + "=" * 60)

@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import logging
 import json
 
+from app.core.gateway_auth import GatewayAuthError, require_gateway_invocation
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,9 +28,25 @@ class CalendarExecutor:
         return bool(self.access_token or self.api_key)
 
     def create_event(self, title: str, start_time: str, end_time: str = None,
-                     description: str = "", location: str = "", trace_id: str = "") -> Dict[str, Any]:
+                     description: str = "", location: str = "", trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """Create a calendar event."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="calendar",
+                    action="create_event",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "calendar",
+                }
+
             # Default end_time = start_time + 1 hour
             if not end_time:
                 try:
@@ -95,9 +113,25 @@ class CalendarExecutor:
             return {"status": "error", "error": str(e), "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat()}
 
-    def update_event(self, event_id: str, updates: Dict[str, Any], trace_id: str = "") -> Dict[str, Any]:
+    def update_event(self, event_id: str, updates: Dict[str, Any], trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """Update an existing calendar event."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="calendar",
+                    action="update_event",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "calendar",
+                }
+
             if not self._is_configured():
                 logger.info(f"[{trace_id}] Calendar simulation: updating event {event_id}")
                 return {
@@ -135,9 +169,25 @@ class CalendarExecutor:
             return {"status": "error", "error": str(e), "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat()}
 
-    def delete_event(self, event_id: str, trace_id: str = "") -> Dict[str, Any]:
+    def delete_event(self, event_id: str, trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """Delete a calendar event."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="calendar",
+                    action="delete_event",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "calendar",
+                }
+
             if not self._is_configured():
                 logger.info(f"[{trace_id}] Calendar simulation: deleting event {event_id}")
                 return {
@@ -166,9 +216,25 @@ class CalendarExecutor:
             return {"status": "error", "error": str(e), "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat()}
 
-    def list_events(self, max_results: int = 10, trace_id: str = "") -> Dict[str, Any]:
+    def list_events(self, max_results: int = 10, trace_id: str = "", gateway_auth: str = None) -> Dict[str, Any]:
         """List upcoming calendar events."""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="calendar",
+                    action="list_events",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "calendar",
+                }
+
             if not self._is_configured():
                 return {
                     "status": "success", "action": "list_events", "events": [],

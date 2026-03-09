@@ -9,6 +9,7 @@ import os
 import json
 from typing import Dict, Any, Optional
 from datetime import datetime
+from hashlib import sha256
 
 # Import all platform executors
 from app.executors.whatsapp_executor import WhatsAppExecutor
@@ -19,6 +20,7 @@ from app.executors.calendar_executor import CalendarExecutor
 from app.executors.reminder_executor import ReminderExecutor
 from app.executors.ems_executor import EMSExecutor
 from app.executors.device_gateway_executor import DeviceGatewayExecutor
+from app.core.gateway_auth import GatewayAuth
 
 
 class ExecutionService:
@@ -51,77 +53,142 @@ class ExecutionService:
         try:
             # ─── ENFORCEMENT GATE ───
             # Harden execution boundary — never trust caller blindly
-            if enforcement_decision != "ALLOW":
+            decision = str(enforcement_decision or "").upper()
+            if decision not in {"ALLOW", "REWRITE"}:
                 return {
                     "status": "blocked",
                     "action_type": action_type,
-                    "reason": f"Action blocked by enforcement policy: {enforcement_decision}",
+                    "reason": f"Action blocked by enforcement policy: {decision or 'UNKNOWN'}",
                     "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat(),
                     "service": "execution_service"
                 }
             
             # Apply rewrite if needed
-            if enforcement_decision == "REWRITE":
+            if decision == "REWRITE":
                 action_data = self._apply_rewrite(action_data, action_type)
             
             platform = action_type.lower()
+            gateway_action = "execute"
             
             # ─── PLATFORM ROUTING ───
             
             if platform == "whatsapp":
+                gateway_action = "send_message"
+                gateway_auth = GatewayAuth.issue(
+                    trace_id=trace_id,
+                    platform=platform,
+                    action=gateway_action,
+                    decision=decision,
+                )
                 return self.whatsapp.send_message(
                     to_number=action_data.get("recipient", action_data.get("to", "")),
                     message=action_data.get("message", ""),
-                    trace_id=trace_id
+                    trace_id=trace_id,
+                    gateway_auth=gateway_auth,
                 )
             
             elif platform == "email":
+                gateway_action = "send_message"
+                gateway_auth = GatewayAuth.issue(
+                    trace_id=trace_id,
+                    platform=platform,
+                    action=gateway_action,
+                    decision=decision,
+                )
                 return self.email.send_message(
                     to_email=action_data.get("recipient", action_data.get("to", "")),
                     subject=action_data.get("subject", "Message from AI Assistant"),
                     message=action_data.get("body", action_data.get("message", "")),
-                    trace_id=trace_id
+                    trace_id=trace_id,
+                    gateway_auth=gateway_auth,
                 )
             
             elif platform == "instagram":
+                gateway_action = "send_message"
+                gateway_auth = GatewayAuth.issue(
+                    trace_id=trace_id,
+                    platform=platform,
+                    action=gateway_action,
+                    decision=decision,
+                )
                 return self.instagram.send_message(
                     recipient_id=action_data.get("recipient", action_data.get("to", "")),
                     message=action_data.get("message", ""),
-                    trace_id=trace_id
+                    trace_id=trace_id,
+                    gateway_auth=gateway_auth,
                 )
             
             elif platform == "telegram":
+                gateway_action = "send_message"
+                gateway_auth = GatewayAuth.issue(
+                    trace_id=trace_id,
+                    platform=platform,
+                    action=gateway_action,
+                    decision=decision,
+                )
                 return self.telegram.send_message(
                     to_chat_id=action_data.get("recipient", action_data.get("to", action_data.get("chat_id", ""))),
                     message=action_data.get("message", ""),
-                    trace_id=trace_id
+                    trace_id=trace_id,
+                    gateway_auth=gateway_auth,
                 )
             
             elif platform == "calendar":
                 action = action_data.get("action", "create_event")
                 if action == "create_event":
+                    gateway_action = "create_event"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.calendar.create_event(
                         title=action_data.get("title", action_data.get("summary", "")),
                         start_time=action_data.get("start_time", ""),
                         end_time=action_data.get("end_time"),
                         description=action_data.get("description", ""),
                         location=action_data.get("location", ""),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "update_event":
+                    gateway_action = "update_event"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.calendar.update_event(
                         event_id=action_data.get("event_id", ""),
                         updates=action_data.get("updates", {}),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "delete_event":
+                    gateway_action = "delete_event"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.calendar.delete_event(
                         event_id=action_data.get("event_id", ""),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "list_events":
-                    return self.calendar.list_events(trace_id=trace_id)
+                    gateway_action = "list_events"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
+                    return self.calendar.list_events(trace_id=trace_id, gateway_auth=gateway_auth)
                 else:
                     return {"status": "error", "error": f"Unknown calendar action: {action}",
                             "trace_id": trace_id, "timestamp": datetime.utcnow().isoformat()}
@@ -129,21 +196,58 @@ class ExecutionService:
             elif platform == "reminder":
                 action = action_data.get("action", "create_reminder")
                 if action == "create_reminder":
+                    gateway_action = "create_reminder"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.reminder.create_reminder(
                         message=action_data.get("message", ""),
                         remind_at=action_data.get("remind_at"),
                         user_id=action_data.get("user_id", ""),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "list_reminders":
+                    gateway_action = "list_reminders"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.reminder.list_reminders(
                         user_id=action_data.get("user_id", ""),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "cancel_reminder":
+                    gateway_action = "cancel_reminder"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.reminder.cancel_reminder(
                         reminder_id=action_data.get("reminder_id", ""),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
+                    )
+                elif action == "deliver_reminder":
+                    gateway_action = "deliver_reminder"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
+                    return self.reminder.deliver_reminder(
+                        reminder_id=action_data.get("reminder_id", ""),
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 else:
                     return {"status": "error", "error": f"Unknown reminder action: {action}",
@@ -152,24 +256,48 @@ class ExecutionService:
             elif platform == "ems":
                 action = action_data.get("action", "create_task")
                 if action == "create_task":
+                    gateway_action = "create_task"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.ems.create_task(
                         title=action_data.get("title", ""),
                         description=action_data.get("description", ""),
                         priority=action_data.get("priority", "medium"),
                         assignee=action_data.get("assignee", ""),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "assign_task":
+                    gateway_action = "assign_task"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.ems.assign_task(
                         task_id=action_data.get("task_id", ""),
                         assignee=action_data.get("assignee", ""),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "update_task":
+                    gateway_action = "update_task"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.ems.update_task(
                         task_id=action_data.get("task_id", ""),
                         updates=action_data.get("updates", {}),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 else:
                     return {"status": "error", "error": f"Unknown EMS action: {action}",
@@ -178,22 +306,45 @@ class ExecutionService:
             elif platform == "device_gateway":
                 action = action_data.get("action", "send_command")
                 if action == "send_command":
+                    gateway_action = "send_command"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.device_gateway.send_command(
                         device_id=action_data.get("device_id", ""),
                         device_type=action_data.get("device_type", "desktop"),
                         command=action_data.get("command", ""),
                         payload=action_data.get("payload"),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "register_device":
+                    gateway_action = "register_device"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
                     return self.device_gateway.register_device(
                         device_id=action_data.get("device_id", ""),
                         device_type=action_data.get("device_type", ""),
                         device_name=action_data.get("device_name", ""),
-                        trace_id=trace_id
+                        trace_id=trace_id,
+                        gateway_auth=gateway_auth,
                     )
                 elif action == "list_devices":
-                    return self.device_gateway.list_devices(trace_id=trace_id)
+                    gateway_action = "list_devices"
+                    gateway_auth = GatewayAuth.issue(
+                        trace_id=trace_id,
+                        platform=platform,
+                        action=gateway_action,
+                        decision=decision,
+                    )
+                    return self.device_gateway.list_devices(trace_id=trace_id, gateway_auth=gateway_auth)
                 else:
                     return {"status": "error", "error": f"Unknown device action: {action}",
                             "trace_id": trace_id, "timestamp": datetime.utcnow().isoformat()}

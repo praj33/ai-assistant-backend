@@ -118,17 +118,21 @@ Create `AI-ASSISTANT-/Backend/test_email_execution.py`:
 ```python
 import os
 from dotenv import load_dotenv
-from app.executors.email_executor import EmailExecutor
+from app.services.execution_service import ExecutionService
 
 load_dotenv()
 
-executor = EmailExecutor()
+gateway = ExecutionService()
 
-result = executor.send_message(
-    to_email="your.test.email@gmail.com",  # Change this
-    subject="AI Assistant Test Email",
-    message="This is a test email from AI Assistant. If you receive this, email execution is working!",
-    trace_id="test_trace_001"
+result = gateway.execute_action(
+    action_type="email",
+    action_data={
+        "to": "your.test.email@gmail.com",  # Change this
+        "subject": "AI Assistant Test Email",
+        "message": "This is a test email from AI Assistant. If you receive this, email execution is working!",
+    },
+    trace_id="test_trace_001",
+    enforcement_decision="ALLOW",
 )
 
 print("Result:", result)

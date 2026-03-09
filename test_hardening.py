@@ -194,10 +194,10 @@ async def test_blocked_content():
             
             # Check if content was properly blocked
             if enforcement_decision == "BLOCK" or safety_decision == "hard_deny":
-                print(f"  ✓ Content correctly blocked")
+                print(f"  OK Content correctly blocked")
                 success_count += 1
             else:
-                print(f"  ⚠ Content may not have been blocked as expected")
+                print(f"  WARN Content may not have been blocked as expected")
                 failure_count += 1
                 
         except Exception as e:
@@ -300,9 +300,9 @@ async def run_comprehensive_tests():
     # Overall assessment
     print(f"\nOverall Assessment:")
     if total_successes / (total_successes + total_failures) >= 0.8:
-        print("  ✓ System demonstrates good reliability and hardening")
+        print("  OK System demonstrates good reliability and hardening")
     else:
-        print("  ⚠ System may need additional hardening work")
+        print("  WARN System may need additional hardening work")
     
     return results
 

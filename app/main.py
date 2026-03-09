@@ -3,6 +3,8 @@ import os
 from datetime import datetime
 from contextlib import asynccontextmanager
 
+import asyncio
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -39,6 +41,7 @@ from app.core.database import create_tables
 from app.core.security import rate_limit, audit_log
 from app.api.assistant import router as assistant_router
 from app.api.webhooks import router as webhook_router
+from app.services.reminder_scheduler import ReminderScheduler, SchedulerConfig
 
 # -------------------------------------------------
 # Logging
@@ -51,6 +54,8 @@ logger = get_logger(__name__)
 # -------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    scheduler_task = None
+    scheduler = None
     # Initialize database tables
     try:
         await create_tables()
@@ -60,7 +65,31 @@ async def lifespan(app: FastAPI):
         # Don't fail startup if database is read-only - app can still run
         # but database features won't work
         logger.warning("Continuing startup without database initialization")
+
+    # Optional: start reminder scheduler worker
+    if os.getenv("REMINDER_SCHEDULER_ENABLED", "0").lower() in {"1", "true", "yes"}:
+        try:
+            scheduler = ReminderScheduler(
+                SchedulerConfig(
+                    poll_interval_seconds=float(os.getenv("REMINDER_SCHEDULER_POLL_SECONDS", "1.0")),
+                    max_batch=int(os.getenv("REMINDER_SCHEDULER_MAX_BATCH", "25")),
+                )
+            )
+            scheduler_task = asyncio.create_task(scheduler.start())
+            logger.info("Reminder scheduler started")
+        except Exception as e:
+            logger.error(f"Failed to start reminder scheduler: {e}")
+
     yield
+
+    # Shutdown reminder scheduler
+    if scheduler:
+        try:
+            scheduler.stop()
+        except Exception:
+            pass
+    if scheduler_task:
+        scheduler_task.cancel()
 
 # -------------------------------------------------
 # FastAPI app

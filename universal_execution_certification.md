@@ -1,7 +1,7 @@
 # Universal Execution Certification
 
 **Status:** ✅ Universal execution gateway complete and enforcement-secure.  
-**Date:** 2026-03-07  
+**Date:** 2026-03-09  
 **Version:** 3.0.0
 
 ---
@@ -14,9 +14,12 @@ All execution paths flow through the mandatory pipeline:
 Safety (Aakanksha) → Enforcement (Raj) → Orchestration (Nilesh) → Execution Adapter (Chandresh)
 ```
 
-**No direct execution paths exist.** The `ExecutionService.execute_action()` method enforces this:
-- Line 1 of every execution: check `enforcement_decision != "ALLOW"` → block
-- Enforcement gate verified via automated test → **PASSED**
+**No direct execution paths exist.** Enforcement is guaranteed by a *double boundary*:
+
+- **Gateway boundary**: `ExecutionService.execute_action()` blocks any decision not in `ALLOW`/`REWRITE`.
+- **Adapter boundary**: every outbound executor method requires a **gateway-signed invocation token** (`gateway_auth`).
+  - Any direct executor call without this token returns `unauthorized_direct_executor_call`.
+  - This is the universal “bridge” requirement: **Safety → Enforcement → Orchestration → Execution Adapter**.
 
 ---
 
@@ -56,6 +59,10 @@ All inbound webhooks route through the full Safety → Enforcement → Orchestra
 Test: Execute telegram action with enforcement_decision="BLOCK"
 Result: {"status": "blocked", "reason": "Action blocked by enforcement policy: BLOCK"}
 Verdict: PASSED — No execution bypass exists.
+
+Test: Call `TelegramExecutor.send_message(...)` directly (no gateway token)
+Result: {"status": "error", "error": "unauthorized: unauthorized_direct_executor_call"}
+Verdict: PASSED — Adapters cannot be invoked directly.
 ```
 
 ---

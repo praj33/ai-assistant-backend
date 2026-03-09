@@ -136,6 +136,16 @@ class PatternLibrary:
             (r'\bterrorist.*attack\b', 99, "Terrorist attack"),
             (r'\bmass.*shooting\b', 98, "Mass violence"),
             (r'\bviolent.*attack\b', 96, "Violence planning"),
+
+            # Explicit illegal-activity intent (defense-in-depth)
+            (r'\bcommit\s+illegal\s+activity\b', 92, "Illegal activity intent"),
+            (r'\billegal\s+activity\b', 88, "Illegal activity mention"),
+            (r'\bI\s+plan\s+to\s+commit\s+illegal\s+activity\b', 95, "Planned illegal activity"),
+
+            # Explicit manipulation intent (harmful intent probing)
+            (r'\bmanipulate\s+someone\b', 88, "Manipulation intent"),
+            (r'\bemotionally\s+manipulat\w*\b', 90, "Emotional manipulation intent"),
+            (r'\bmanipulat\w*\s+someone\s+emotionally\b', 92, "Emotional manipulation intent"),
         ],
         
         # SEXUAL_ESCALATION_ATTEMPT patterns

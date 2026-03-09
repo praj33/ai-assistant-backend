@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.executors.email_executor import EmailExecutor
+from app.services.execution_service import ExecutionService
 
 load_dotenv()
 
@@ -36,14 +36,18 @@ if not test_email:
 print(f"\n[EMAIL] Sending test email to: {test_email}")
 
 # Initialize executor
-executor = EmailExecutor()
+gateway = ExecutionService()
 
-# Send test email
-result = executor.send_message(
-    to_email=test_email,
-    subject="AI Assistant Test Email",
-    message="This is a test email from AI Assistant.\n\nIf you receive this, email execution is working correctly!\n\nTrace ID: test_trace_001",
-    trace_id="test_trace_001"
+# Send test email (must go through Universal Execution Gateway)
+result = gateway.execute_action(
+    action_type="email",
+    action_data={
+        "to": test_email,
+        "subject": "AI Assistant Test Email",
+        "message": "This is a test email from AI Assistant.\n\nIf you receive this, email execution is working correctly!\n\nTrace ID: test_trace_001",
+    },
+    trace_id="test_trace_001",
+    enforcement_decision="ALLOW",
 )
 
 print("\n" + "=" * 60)

@@ -4,6 +4,8 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
 
+from app.core.gateway_auth import GatewayAuthError, require_gateway_invocation
+
 logger = logging.getLogger(__name__)
 
 class WhatsAppExecutor:
@@ -13,9 +15,25 @@ class WhatsAppExecutor:
         self.whatsapp_number = os.getenv("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")
         self.base_url = f"https://api.twilio.com/2010-04-01/Accounts/{self.account_sid}/Messages.json"
         
-    def send_message(self, to_number: str, message: str, trace_id: str) -> Dict[str, Any]:
+    def send_message(self, to_number: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """Send WhatsApp message via Twilio"""
         try:
+            try:
+                require_gateway_invocation(
+                    gateway_auth=gateway_auth,
+                    trace_id=trace_id,
+                    platform="whatsapp",
+                    action="send_message",
+                )
+            except GatewayAuthError as e:
+                return {
+                    "status": "error",
+                    "error": f"unauthorized: {str(e)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "whatsapp",
+                }
+
             if not self.account_sid or not self.auth_token:
                 return {
                     "status": "error",

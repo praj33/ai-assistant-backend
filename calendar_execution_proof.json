@@ -1,6 +1,6 @@
 {
   "test": "calendar_execution",
-  "executor": "CalendarExecutor",
+  "executor": "ExecutionService -> CalendarExecutor",
   "methods": [
     "create_event",
     "update_event",
@@ -10,7 +10,7 @@
   "enforcement_gated": true,
   "result": {
     "status": "success",
-    "event_id": "sim_evt_20260307102825",
+    "event_id": "sim_evt_20260309073407",
     "action": "create_event",
     "event": {
       "summary": "Team Meeting",
@@ -27,7 +27,7 @@
     },
     "method": "calendar_simulation",
     "trace_id": "test_trace_002",
-    "timestamp": "2026-03-07T10:28:25.860945",
+    "timestamp": "2026-03-09T07:34:07.082256",
     "platform": "calendar",
     "note": "Simulation mode \u2014 set GOOGLE_CALENDAR_ACCESS_TOKEN for live execution"
   }
