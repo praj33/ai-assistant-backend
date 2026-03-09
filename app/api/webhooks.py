@@ -200,11 +200,10 @@ async def telegram_webhook(request: Request):
         sender = message.get("from", {})
         text = message.get("text", "")
 
-        # Persist username -> chat_id mapping for future outbound sends
+        # Persist contact details (works for username and no-username users)
+        contact_service = TelegramContactService()
+        contact_service.save_from_telegram_message(chat, sender)
         chat_id = chat.get("id")
-        username = sender.get("username")
-        if chat_id is not None and username:
-            TelegramContactService().save_contact(username=username, chat_id=int(chat_id))
 
         internal_request = {
             "version": "3.0.0",
@@ -238,6 +237,21 @@ async def telegram_webhook_verify(request: Request):
     """Telegram webhook verification — just returns OK."""
     return {"status": "ok", "service": "telegram_webhook"}
 
+
+@router.get("/telegram/contacts")
+async def list_telegram_contacts():
+    """
+    List known Telegram contacts that have messaged the bot.
+    Enables the UI to show a contact picker without exposing chat IDs directly.
+    """
+    service = TelegramContactService()
+    contacts = service.list_contacts()
+    return {
+        "status": "success",
+        "count": len(contacts),
+        "contacts": contacts,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 @router.post("/webhook/instagram")
 async def instagram_webhook(request: Request):
