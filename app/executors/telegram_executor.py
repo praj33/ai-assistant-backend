@@ -63,6 +63,7 @@ class TelegramExecutor:
             }
 
             logger.info(f"[{trace_id}] Sending Telegram message to {to_chat_id}")
+            logger.debug(f"[{trace_id}] Telegram request URL: {url}")
             response = requests.post(url, json=data, timeout=30)
 
             if response.status_code == 200:
@@ -78,11 +79,20 @@ class TelegramExecutor:
                     "platform": "telegram"
                 }
             else:
-                error_detail = response.json().get("description", response.text)
-                logger.error(f"[{trace_id}] Telegram API error: {response.status_code} - {error_detail}")
+                try:
+                    body = response.json()
+                    error_detail = body.get("description", body)
+                except Exception:
+                    error_detail = response.text
+
+                logger.error(
+                    f"[{trace_id}] Telegram API error: {response.status_code} - {error_detail} "
+                    f"(chat_id={to_chat_id})"
+                )
                 return {
                     "status": "error",
                     "error": f"Telegram API error: {response.status_code} - {error_detail}",
+                    "chat_id": to_chat_id,
                     "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat()
                 }
