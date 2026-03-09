@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 
 from app.core.assistant_orchestrator import handle_assistant_request
+from app.services.telegram_contact_service import TelegramContactService
 
 router = APIRouter()
 
@@ -199,13 +200,19 @@ async def telegram_webhook(request: Request):
         sender = message.get("from", {})
         text = message.get("text", "")
 
+        # Persist username -> chat_id mapping for future outbound sends
+        chat_id = chat.get("id")
+        username = sender.get("username")
+        if chat_id is not None and username:
+            TelegramContactService().save_contact(username=username, chat_id=int(chat_id))
+
         internal_request = {
             "version": "3.0.0",
             "input": {"message": text},
             "context": {
                 "platform": "telegram",
                 "device": "mobile",
-                "session_id": str(chat.get("id", "")),
+                "session_id": str(chat_id or ""),
                 "voice_input": False,
                 "preferred_language": sender.get("language_code", "auto"),
                 "detected_language": None

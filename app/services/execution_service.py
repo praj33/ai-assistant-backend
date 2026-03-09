@@ -21,6 +21,7 @@ from app.executors.reminder_executor import ReminderExecutor
 from app.executors.ems_executor import EMSExecutor
 from app.executors.device_gateway_executor import DeviceGatewayExecutor
 from app.core.gateway_auth import GatewayAuth
+from app.services.telegram_contact_service import TelegramContactService
 
 
 class ExecutionService:
@@ -127,8 +128,15 @@ class ExecutionService:
                     action=gateway_action,
                     decision=decision,
                 )
+                recipient = action_data.get("recipient", action_data.get("to", action_data.get("chat_id", "")))
+                recipient_str = str(recipient) if recipient is not None else ""
+                # If recipient is not a numeric chat_id, try to resolve via username mapping.
+                if recipient_str and not recipient_str.lstrip("-").isdigit():
+                    resolved = TelegramContactService().resolve_chat_id(recipient_str)
+                    if resolved is not None:
+                        recipient_str = str(resolved)
                 return self.telegram.send_message(
-                    to_chat_id=action_data.get("recipient", action_data.get("to", action_data.get("chat_id", ""))),
+                    to_chat_id=recipient_str,
                     message=action_data.get("message", ""),
                     trace_id=trace_id,
                     gateway_auth=gateway_auth,
