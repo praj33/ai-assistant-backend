@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 
 from app.core.assistant_orchestrator import handle_assistant_request
+from app.core.security import verify_token_string
 
 router = APIRouter()
 
@@ -29,6 +30,11 @@ class AssistantContext(BaseModel):
     detected_language: Optional[str] = None
     audio_input_data: Optional[bytes] = None
     audio_output_requested: bool = False
+    age_gate_status: bool = False
+    region_policy: Optional[dict] = None
+    platform_policy: Optional[dict] = None
+    user_context: Optional[dict] = None
+    authenticated_user_context: Optional[dict] = None
 
 
 class AssistantRequest(BaseModel):
@@ -64,6 +70,43 @@ class AssistantErrorResponse(BaseModel):
     status: Literal["error"]
     error: dict
     processed_at: str
+
+
+def _build_authenticated_user_context(
+    *,
+    request_context: AssistantContext,
+    x_api_key: str,
+    authorization: Optional[str],
+) -> dict:
+    auth_context = dict(request_context.user_context or {})
+    auth_context.update(request_context.authenticated_user_context or {})
+
+    auth_context["api_key_present"] = bool(x_api_key)
+    auth_context.setdefault("auth_method", "api_key")
+    auth_context.setdefault("principal", "api_key_user")
+
+    if authorization:
+        auth_context["authorization_present"] = True
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() == "bearer" and token:
+            try:
+                token_data = verify_token_string(token)
+                auth_context["principal"] = token_data.username or auth_context["principal"]
+                auth_context["auth_method"] = "bearer"
+                auth_context["token_valid"] = True
+            except Exception:
+                auth_context["token_valid"] = False
+        else:
+            auth_context["token_valid"] = False
+    else:
+        auth_context["authorization_present"] = False
+
+    if request_context.session_id:
+        auth_context.setdefault("session_id", request_context.session_id)
+    auth_context.setdefault("platform", request_context.platform)
+    auth_context.setdefault("device", request_context.device)
+
+    return {k: v for k, v in auth_context.items() if v is not None}
 
 
 # =========================
@@ -138,14 +181,23 @@ async def assistant_options(request: Request):
 )
 async def assistant_endpoint(
     request: AssistantRequest,
-    x_api_key: str = Header(...)
+    x_api_key: str = Header(...),
+    authorization: Optional[str] = Header(None),
 ):
     """
     SINGLE production entrypoint for AI Assistant.
     Backend is LOCKED and frontend-safe.
     """
     try:
-        return await handle_assistant_request(request)
+        request_payload = request.dict()
+        authenticated_user_context = _build_authenticated_user_context(
+            request_context=request.context,
+            x_api_key=x_api_key,
+            authorization=authorization,
+        )
+        request_payload["context"]["authenticated_user_context"] = authenticated_user_context
+        request_payload["context"]["user_context"] = authenticated_user_context
+        return await handle_assistant_request(request_payload)
     except Exception as e:
         # Final safety net - catch any unhandled exceptions
         import traceback

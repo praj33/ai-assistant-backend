@@ -22,11 +22,15 @@ class EnforcementAdapter:
         if os.getenv("AKANKSHA_VALIDATOR_FAIL", "").strip().lower() in {"1", "true", "yes"}:
             raise RuntimeError("Injected Akanksha validator failure")
 
-        from app.services.safety_service import SafetyService
+        prevalidated = getattr(input_payload, "akanksha_validation", None)
+        if isinstance(prevalidated, dict):
+            result = prevalidated
+        else:
+            from app.services.safety_service import SafetyService
 
-        text = getattr(input_payload, "emotional_output", None) or ""
-        trace_id = getattr(input_payload, "trace_id", None) or "trace_unknown"
-        result = SafetyService().validate_content(content=text, trace_id=trace_id)
+            text = getattr(input_payload, "emotional_output", None) or ""
+            trace_id = getattr(input_payload, "trace_id", None) or "trace_unknown"
+            result = SafetyService().validate_content(content=text, trace_id=trace_id)
 
         safety_decision = result.get("decision")
         if safety_decision == "hard_deny":
@@ -40,5 +44,5 @@ class EnforcementAdapter:
             "decision": decision,
             "risk_category": result.get("risk_category"),
             "confidence": result.get("confidence"),
+            "safe_output": result.get("safe_output"),
         }
-

@@ -144,6 +144,7 @@ def enforce(input_payload) -> EnforcementVerdict:
             trace_id=trace_id,
             reason_code="SAFE_REWRITE_REQUIRED",
             rewrite_class="DETERMINISTIC_REWRITE",
+            safe_output=akanksha_result.get("safe_output"),
         )
 
     elif final_decision == "BLOCK":

@@ -84,22 +84,20 @@ class ReminderScheduler:
             enforcement_result = self.enforcement.enforce_policy(payload=enforcement_payload, trace_id=trace_id)
             self.bucket.log_event(trace_id, "enforcement_decision", enforcement_result)
 
-            decision = enforcement_result.get("decision", "BLOCK")
             delivery = self.gateway.execute_action(
                 action_type="reminder",
                 action_data={"action": "deliver_reminder", "reminder_id": reminder_id},
                 trace_id=trace_id,
-                enforcement_decision=decision,
+                enforcement_decision=enforcement_result,
             )
             self.bucket.log_event(trace_id, "reminder_delivery", delivery)
             deliveries.append(
                 {
                     "trace_id": trace_id,
                     "reminder_id": reminder_id,
-                    "decision": decision,
+                    "decision": enforcement_result.get("decision", "BLOCK"),
                     "delivery": delivery,
                 }
             )
 
         return {"status": "ok", "due": len(due), "deliveries": deliveries, "timestamp": datetime.utcnow().isoformat()}
-

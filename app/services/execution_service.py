@@ -5,11 +5,8 @@ Supports: WhatsApp, Email, Instagram, Telegram, Calendar, Reminder, EMS, Device 
 Nothing executes without enforcement ALLOW.
 """
 
-import os
-import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
-from hashlib import sha256
 
 # Import all platform executors
 from app.executors.whatsapp_executor import WhatsAppExecutor
@@ -21,6 +18,7 @@ from app.executors.reminder_executor import ReminderExecutor
 from app.executors.ems_executor import EMSExecutor
 from app.executors.device_gateway_executor import DeviceGatewayExecutor
 from app.core.gateway_auth import GatewayAuth
+from app.external.enforcement.enforcement_verdict import EnforcementVerdict
 from app.services.telegram_contact_service import TelegramContactService
 
 
@@ -42,9 +40,36 @@ class ExecutionService:
         self.reminder = ReminderExecutor()
         self.ems = EMSExecutor()
         self.device_gateway = DeviceGatewayExecutor()
+
+    def _coerce_enforcement_verdict(self, enforcement_input: Any, trace_id: str) -> EnforcementVerdict:
+        if isinstance(enforcement_input, EnforcementVerdict):
+            return enforcement_input
+
+        if isinstance(enforcement_input, dict):
+            decision = str(enforcement_input.get("decision", "BLOCK")).upper()
+            scope = enforcement_input.get("scope")
+            if not scope:
+                scope = "response" if decision == "REWRITE" else "both"
+            return EnforcementVerdict(
+                decision=decision if decision in {"ALLOW", "REWRITE", "BLOCK", "TERMINATE"} else "BLOCK",
+                scope=scope if scope in {"response", "action", "both"} else "both",
+                trace_id=str(enforcement_input.get("trace_id") or trace_id),
+                reason_code=str(enforcement_input.get("reason_code") or "RUNTIME_VERDICT_DICT"),
+                rewrite_class=enforcement_input.get("rewrite_class"),
+                safe_output=enforcement_input.get("safe_output"),
+            )
+
+        decision = str(enforcement_input or "BLOCK").upper()
+        scope = "response" if decision == "REWRITE" else "both"
+        return EnforcementVerdict(
+            decision=decision if decision in {"ALLOW", "REWRITE", "BLOCK", "TERMINATE"} else "BLOCK",
+            scope=scope,
+            trace_id=trace_id,
+            reason_code="LEGACY_RUNTIME_DECISION",
+        )
         
     def execute_action(self, action_type: str, action_data: Dict[str, Any],
-                       trace_id: str, enforcement_decision: str) -> Dict[str, Any]:
+                       trace_id: str, enforcement_decision: Any) -> Dict[str, Any]:
         """
         Execute action based on enforcement decision using real platform APIs.
         
@@ -54,13 +79,19 @@ class ExecutionService:
         try:
             # ─── ENFORCEMENT GATE ───
             # Harden execution boundary — never trust caller blindly
-            decision = str(enforcement_decision or "").upper()
+            verdict = self._coerce_enforcement_verdict(enforcement_decision, trace_id)
             # Phase 5: execution authority gate — ONLY ALLOW may execute real-world actions
-            if decision != "ALLOW":
+            if not verdict.allows_action():
                 return {
                     "status": "blocked",
                     "action_type": action_type,
-                    "reason": f"Action blocked by enforcement policy: {decision or 'UNKNOWN'}",
+                    "reason": f"Action blocked by enforcement policy: {verdict.decision}",
+                    "enforcement": {
+                        "decision": verdict.decision,
+                        "scope": verdict.scope,
+                        "trace_id": verdict.trace_id,
+                        "reason_code": verdict.reason_code,
+                    },
                     "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat(),
                     "service": "execution_service"
@@ -68,6 +99,7 @@ class ExecutionService:
             # Note: REWRITE affects responses, not actions; do not execute on REWRITE.
             
             platform = action_type.lower()
+            decision = verdict.decision
             gateway_action = "execute"
             
             # ─── PLATFORM ROUTING ───

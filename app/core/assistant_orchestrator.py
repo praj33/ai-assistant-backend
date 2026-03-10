@@ -50,6 +50,20 @@ def _to_namespace(value):
     return value
 
 
+def _to_plain(value):
+    if isinstance(value, SimpleNamespace):
+        return {
+            k: _to_plain(v)
+            for k, v in value.__dict__.items()
+            if k != "dict"
+        }
+    if isinstance(value, dict):
+        return {k: _to_plain(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_to_plain(v) for v in value]
+    return value
+
+
 def _normalize_request(request):
     """
     Accept both Pydantic-style request objects and raw dict payloads.
@@ -79,6 +93,11 @@ def _normalize_request(request):
         "preferred_language": "auto",
         "detected_language": None,
         "audio_output_requested": False,
+        "age_gate_status": False,
+        "region_policy": None,
+        "platform_policy": None,
+        "user_context": None,
+        "authenticated_user_context": None,
     }
     for k, v in defaults.items():
         if not hasattr(req.context, k):
@@ -86,9 +105,50 @@ def _normalize_request(request):
 
     # Provide .dict() for logging compatibility
     if not hasattr(req.context, "dict"):
-        req.context.dict = lambda: {k: getattr(req.context, k) for k in req.context.__dict__.keys() if k != "dict"}
+        req.context.dict = lambda: {
+            k: _to_plain(getattr(req.context, k))
+            for k in req.context.__dict__.keys()
+            if k != "dict"
+        }
 
     return req
+
+
+def _build_authenticated_user_context(context) -> Dict[str, Any]:
+    raw_context = getattr(context, "authenticated_user_context", None)
+    if raw_context is None:
+        raw_context = getattr(context, "user_context", None)
+
+    user_context = _to_plain(raw_context) if raw_context is not None else {}
+    if not isinstance(user_context, dict):
+        user_context = {"principal": str(user_context)}
+
+    if getattr(context, "session_id", None) and "session_id" not in user_context:
+        user_context["session_id"] = context.session_id
+    if getattr(context, "platform", None) and "platform" not in user_context:
+        user_context["platform"] = context.platform
+    if getattr(context, "device", None) and "device" not in user_context:
+        user_context["device"] = context.device
+
+    return user_context
+
+
+def _build_platform_policy(context, authenticated_user_context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    raw_policy = getattr(context, "platform_policy", None)
+    platform_policy = _to_plain(raw_policy) if raw_policy is not None else {}
+    if platform_policy and not isinstance(platform_policy, dict):
+        platform_policy = {"platform_policy": platform_policy}
+    if not platform_policy:
+        platform_policy = {}
+
+    if getattr(context, "platform", None):
+        platform_policy.setdefault("platform", context.platform)
+    if getattr(context, "device", None):
+        platform_policy.setdefault("device", context.device)
+    if authenticated_user_context:
+        platform_policy["authenticated_user_context"] = authenticated_user_context
+
+    return platform_policy or None
 
 def generate_trace_id() -> str:
     """Generate unique trace ID for request tracking"""
@@ -232,11 +292,12 @@ def log_to_bucket(trace_id: str, stage: str, data: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Bucket logging failed for {trace_id}: {e}")
 
-def call_safety_service(text: str, trace_id: str) -> Dict[str, Any]:
+def call_safety_service(text: str, trace_id: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Call Aakansha's safety validation service"""
     result = safety_service.validate_content(
         content=text,
-        trace_id=trace_id
+        trace_id=trace_id,
+        context=context,
     )
     log_to_bucket(trace_id, "safety_validation", result)
     return result
@@ -333,26 +394,19 @@ async def handle_assistant_request(request):
             "context": request.context.dict() if hasattr(request.context, 'dict') else str(request.context),
             "timestamp": datetime.utcnow().isoformat()
         })
+        authenticated_user_context = _build_authenticated_user_context(request.context)
+        platform_policy = _build_platform_policy(request.context, authenticated_user_context)
+        safety_context = {
+            "age_gate_status": bool(getattr(request.context, "age_gate_status", False)),
+            "region_rule_status": getattr(request.context, "region_policy", None),
+            "platform_policy_state": platform_policy,
+        }
         
         # -------------------------------
         # STEP 1: SAFETY GATE (Aakansha)
         # -------------------------------
         logger.info(f"[{trace_id}] Calling Safety Service")
-        safety_result = call_safety_service(text, trace_id)
-        
-        # If safety blocks, return immediately
-        if safety_result.get("decision") == "hard_deny":
-            log_to_bucket(trace_id, "request_blocked", {
-                "reason": "safety_hard_deny",
-                "safety_result": safety_result
-            })
-            return success_response(
-                result_type="passive",
-                response_text=CRISIS_SAFE_RESPONSE,
-                enforcement={"decision": "BLOCK", "reason": "safety_hard_deny", "trace_id": trace_id},
-                safety=safety_result,
-                trace_id=trace_id
-            )
+        safety_result = call_safety_service(text, trace_id, safety_context)
         
         # -------------------------------
         # STEP 2: INTELLIGENCE (Sankalp)
@@ -374,11 +428,26 @@ async def handle_assistant_request(request):
             "intelligence": intelligence_result,
             "user_input": text,
             "intent": "general",  # Will be enhanced later
-            "trace_id": trace_id
+            "trace_id": trace_id,
+            "age_gate_status": bool(getattr(request.context, "age_gate_status", False)),
+            "region_policy": getattr(request.context, "region_policy", None),
+            "platform_policy": platform_policy,
+            "authenticated_user_context": authenticated_user_context,
+            "user_context": authenticated_user_context,
         }
         enforcement_result = call_enforcement_service(enforcement_payload, trace_id)
         
         # Handle enforcement decisions
+        if enforcement_result.get("decision") == "TERMINATE":
+            log_to_bucket(trace_id, "request_terminated", {
+                "reason": "enforcement_terminate",
+                "enforcement_result": enforcement_result
+            })
+            return terminated_response(
+                enforcement=enforcement_result,
+                trace_id=trace_id,
+            )
+
         if enforcement_result.get("decision") == "BLOCK":
             log_to_bucket(trace_id, "request_blocked", {
                 "reason": "enforcement_block",
@@ -386,7 +455,11 @@ async def handle_assistant_request(request):
             })
             return success_response(
                 result_type="passive",
-                response_text=CRISIS_SAFE_RESPONSE,
+                response_text=(
+                    CRISIS_SAFE_RESPONSE
+                    if safety_result.get("decision") == "hard_deny"
+                    else safety_result.get("safe_output") or CRISIS_SAFE_RESPONSE
+                ),
                 enforcement=enforcement_result,
                 safety=safety_result,
                 trace_id=trace_id
@@ -430,7 +503,12 @@ async def handle_assistant_request(request):
         detected_platform = _detect_platform(text_lower, intent)
         
         if enforcement_result.get("decision") == "REWRITE":
-            response_text = enforcement_result.get("rewritten_output", "I understand. Let me help you with that in a different way.")
+            response_text = (
+                enforcement_result.get("safe_output")
+                or enforcement_result.get("rewritten_output")
+                or safety_result.get("safe_output")
+                or "I understand. Let me help you with that in a different way."
+            )
             result_type = "passive"
         
         elif detected_platform in ["whatsapp", "email", "telegram", "instagram",
@@ -445,7 +523,7 @@ async def handle_assistant_request(request):
                     action_type=detected_platform,
                     action_data=action_data,
                     trace_id=trace_id,
-                    enforcement_decision=enforcement_result.get("decision", "ALLOW")
+                    enforcement_decision=enforcement_result
                 )
                 log_to_bucket(trace_id, "action_execution", execution_result)
                 
@@ -581,6 +659,20 @@ def error_response(code, message, trace_id=None):
         "error": {
             "code": code,
             "message": message,
+        },
+        "processed_at": datetime.utcnow().isoformat() + "Z",
+        "trace_id": trace_id,
+    }
+
+
+def terminated_response(enforcement: Dict[str, Any], trace_id: str):
+    return {
+        "version": "3.0.0",
+        "status": "error",
+        "error": {
+            "code": "ENFORCEMENT_TERMINATED",
+            "message": "Request terminated by enforcement runtime.",
+            "enforcement": enforcement,
         },
         "processed_at": datetime.utcnow().isoformat() + "Z",
         "trace_id": trace_id,
