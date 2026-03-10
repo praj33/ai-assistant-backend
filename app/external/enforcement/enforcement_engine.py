@@ -35,6 +35,48 @@ def _canonical_trace_payload(input_payload) -> dict:
     }
 
 
+def _precondition_block(trace_payload: dict, *, request_trace_id: str | None, reason_code: str) -> EnforcementVerdict:
+    trace_id = generate_trace_id(
+        input_payload=trace_payload,
+        enforcement_category="BLOCK",
+    )
+    return EnforcementVerdict(
+        decision="BLOCK",
+        scope="both",
+        trace_id=trace_id,
+        reason_code=reason_code,
+        request_trace_id=request_trace_id,
+    )
+
+
+def _extract_mediation_decision(input_payload) -> str | None:
+    decision = getattr(input_payload, "mediation_decision", None)
+    if decision:
+        return str(decision)
+
+    validation = getattr(input_payload, "akanksha_validation", None)
+    if isinstance(validation, dict):
+        raw = validation.get("decision")
+        if raw:
+            return str(raw)
+
+    return None
+
+
+def _extract_mediation_trace_id(input_payload) -> str | None:
+    trace_id = getattr(input_payload, "mediation_trace_id", None)
+    if trace_id:
+        return str(trace_id)
+
+    validation = getattr(input_payload, "akanksha_validation", None)
+    if isinstance(validation, dict):
+        raw = validation.get("trace_id")
+        if raw:
+            return str(raw)
+
+    return None
+
+
 def enforce(input_payload) -> EnforcementVerdict:
     """
     Sole enforcement entrypoint.
@@ -45,6 +87,70 @@ def enforce(input_payload) -> EnforcementVerdict:
     # STEP 0 — CANONICAL INPUT SNAPSHOT (LOCKED)
     # -------------------------------------------------
     trace_payload = _canonical_trace_payload(input_payload)
+    request_trace_id = getattr(input_payload, "trace_id", None)
+    mediation_decision = _extract_mediation_decision(input_payload)
+    mediation_trace_id = _extract_mediation_trace_id(input_payload)
+
+    if not request_trace_id or not mediation_decision or not mediation_trace_id:
+        verdict = _precondition_block(
+            trace_payload,
+            request_trace_id=str(request_trace_id) if request_trace_id else None,
+            reason_code="MISSING_MEDIATION",
+        )
+        log_enforcement(
+            trace_id=verdict.trace_id,
+            input_snapshot=trace_payload,
+            akanksha_verdict={
+                "decision": mediation_decision,
+                "trace_id": mediation_trace_id,
+            },
+            evaluator_results=[],
+            final_decision=verdict.decision,
+        )
+        return verdict
+
+    request_trace_id = str(request_trace_id)
+    mediation_trace_id = str(mediation_trace_id)
+
+    if request_trace_id != mediation_trace_id:
+        verdict = _precondition_block(
+            trace_payload,
+            request_trace_id=request_trace_id,
+            reason_code="TRACE_MISMATCH",
+        )
+        log_enforcement(
+            trace_id=verdict.trace_id,
+            input_snapshot=trace_payload,
+            akanksha_verdict={
+                "decision": mediation_decision,
+                "trace_id": mediation_trace_id,
+            },
+            evaluator_results=[],
+            final_decision=verdict.decision,
+        )
+        return verdict
+
+    if getattr(input_payload, "bucket_active", False) and not getattr(
+        input_payload,
+        "mediation_artifact_present",
+        False,
+    ):
+        verdict = _precondition_block(
+            trace_payload,
+            request_trace_id=request_trace_id,
+            reason_code="MISSING_BUCKET_ARTIFACT",
+        )
+        log_enforcement(
+            trace_id=verdict.trace_id,
+            input_snapshot=trace_payload,
+            akanksha_verdict={
+                "decision": mediation_decision,
+                "trace_id": mediation_trace_id,
+            },
+            evaluator_results=[],
+            final_decision=verdict.decision,
+        )
+        return verdict
 
     # -------------------------------------------------
     # STEP 1 — GLOBAL KILL SWITCH (ABSOLUTE)
@@ -60,6 +166,7 @@ def enforce(input_payload) -> EnforcementVerdict:
             scope="both",
             trace_id=trace_id,
             reason_code="GLOBAL_KILL_SWITCH",
+            request_trace_id=request_trace_id,
         )
 
         log_enforcement(
@@ -95,6 +202,7 @@ def enforce(input_payload) -> EnforcementVerdict:
             scope="both",
             trace_id=trace_id,
             reason_code="AKANKSHA_VALIDATION_FAILED",
+            request_trace_id=request_trace_id,
         )
 
         log_enforcement(
@@ -135,6 +243,7 @@ def enforce(input_payload) -> EnforcementVerdict:
             scope="both",
             trace_id=trace_id,
             reason_code="CONTENT_AND_ACTION_ALLOWED",
+            request_trace_id=request_trace_id,
         )
 
     elif final_decision == "REWRITE":
@@ -143,6 +252,7 @@ def enforce(input_payload) -> EnforcementVerdict:
             scope="response",
             trace_id=trace_id,
             reason_code="SAFE_REWRITE_REQUIRED",
+            request_trace_id=request_trace_id,
             rewrite_class="DETERMINISTIC_REWRITE",
             safe_output=akanksha_result.get("safe_output"),
         )
@@ -153,6 +263,7 @@ def enforce(input_payload) -> EnforcementVerdict:
             scope="both",
             trace_id=trace_id,
             reason_code="POLICY_VIOLATION",
+            request_trace_id=request_trace_id,
         )
 
     else:  # TERMINATE
@@ -161,6 +272,7 @@ def enforce(input_payload) -> EnforcementVerdict:
             scope="both",
             trace_id=trace_id,
             reason_code="SYSTEM_TERMINATION",
+            request_trace_id=request_trace_id,
         )
 
     # -------------------------------------------------

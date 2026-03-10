@@ -10,6 +10,42 @@ from app.services.telegram_contact_service import TelegramContactService
 router = APIRouter()
 
 
+def _build_internal_request(
+    *,
+    message: str,
+    platform: str,
+    device: str,
+    session_id: str,
+    voice_input: bool,
+    preferred_language: str = "auto",
+    principal: Optional[str] = None,
+) -> Dict[str, Any]:
+    authenticated_user_context = {
+        "auth_method": f"{platform}_webhook",
+        "principal": principal or session_id or f"{platform}_anonymous",
+        "platform": platform,
+        "device": device,
+    }
+    if session_id:
+        authenticated_user_context["session_id"] = str(session_id)
+
+    return {
+        "version": "3.0.0",
+        "input": {"message": message},
+        "context": {
+            "platform": platform,
+            "device": device,
+            "session_id": str(session_id or ""),
+            "voice_input": voice_input,
+            "preferred_language": preferred_language,
+            "detected_language": None,
+            "authenticated_user_context": authenticated_user_context,
+            "user_context": authenticated_user_context,
+        },
+    }
+
+
+@router.post("/webhooks/whatsapp")
 @router.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
     """
@@ -42,18 +78,14 @@ async def whatsapp_webhook(request: Request):
                 sender_id = messaging_event["sender"]["id"]
                 
                 # Create internal request object that follows the same flow as regular API requests
-                internal_request = {
-                    "version": "3.0.0",
-                    "input": {"message": message_text},
-                    "context": {
-                        "platform": "whatsapp",
-                        "device": "mobile",
-                        "session_id": sender_id,
-                        "voice_input": False,
-                        "preferred_language": "auto",
-                        "detected_language": None
-                    }
-                }
+                internal_request = _build_internal_request(
+                    message=message_text,
+                    platform="whatsapp",
+                    device="mobile",
+                    session_id=str(sender_id or ""),
+                    voice_input=False,
+                    principal=str(sender_id or ""),
+                )
                 
                 # Process through main orchestrator (same safety → intelligence → enforcement → orchestration flow)
                 result = await handle_assistant_request(internal_request)
@@ -78,6 +110,7 @@ async def whatsapp_webhook(request: Request):
         raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(e)}")
 
 
+@router.post("/webhooks/email")
 @router.post("/webhook/email")
 async def email_webhook(request: Request):
     """
@@ -105,18 +138,14 @@ async def email_webhook(request: Request):
             return {"status": "ignored", "reason": "empty_content"}
         
         # Create internal request object
-        internal_request = {
-            "version": "3.0.0",
-            "input": {"message": f"Subject: {subject}\n\n{email_content}"},
-            "context": {
-                "platform": "email",
-                "device": "desktop",
-                "session_id": sender,
-                "voice_input": False,
-                "preferred_language": "auto",
-                "detected_language": None
-            }
-        }
+        internal_request = _build_internal_request(
+            message=f"Subject: {subject}\n\n{email_content}",
+            platform="email",
+            device="desktop",
+            session_id=str(sender or ""),
+            voice_input=False,
+            principal=str(sender or ""),
+        )
         
         # Process through main orchestrator (same safety → intelligence → enforcement → orchestration flow)
         result = await handle_assistant_request(internal_request)
@@ -135,6 +164,8 @@ async def email_webhook(request: Request):
         raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(e)}")
 
 
+@router.post("/webhooks/call")
+@router.post("/webhooks/telephony")
 @router.post("/webhook/telephony")
 async def telephony_webhook(request: Request):
     """
@@ -152,18 +183,14 @@ async def telephony_webhook(request: Request):
             return {"status": "ignored", "reason": "no_transcription"}
         
         # Create internal request object
-        internal_request = {
-            "version": "3.0.0",
-            "input": {"message": transcription},
-            "context": {
-                "platform": "telephony",
-                "device": "phone",
-                "session_id": caller_id,
-                "voice_input": True,  # Voice input from call
-                "preferred_language": "auto",
-                "detected_language": None
-            }
-        }
+        internal_request = _build_internal_request(
+            message=transcription,
+            platform="telephony",
+            device="phone",
+            session_id=str(caller_id or ""),
+            voice_input=True,
+            principal=str(caller_id or ""),
+        )
         
         # Process through main orchestrator (same safety → intelligence → enforcement → orchestration flow)
         result = await handle_assistant_request(internal_request)
@@ -182,6 +209,7 @@ async def telephony_webhook(request: Request):
         raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(e)}")
 
 
+@router.post("/webhooks/telegram")
 @router.post("/webhook/telegram")
 async def telegram_webhook(request: Request):
     """
@@ -205,18 +233,15 @@ async def telegram_webhook(request: Request):
         contact_service.save_from_telegram_message(chat, sender)
         chat_id = chat.get("id")
 
-        internal_request = {
-            "version": "3.0.0",
-            "input": {"message": text},
-            "context": {
-                "platform": "telegram",
-                "device": "mobile",
-                "session_id": str(chat_id or ""),
-                "voice_input": False,
-                "preferred_language": sender.get("language_code", "auto"),
-                "detected_language": None
-            }
-        }
+        internal_request = _build_internal_request(
+            message=text,
+            platform="telegram",
+            device="mobile",
+            session_id=str(chat_id or ""),
+            voice_input=False,
+            preferred_language=sender.get("language_code", "auto"),
+            principal=sender.get("username") or str(sender.get("id") or chat_id or ""),
+        )
 
         result = await handle_assistant_request(internal_request)
         print(f"Telegram message from {sender.get('username', sender.get('id'))} processed. Trace: {result.get('trace_id')}")
@@ -253,6 +278,7 @@ async def list_telegram_contacts():
         "timestamp": datetime.utcnow().isoformat(),
     }
 
+@router.post("/webhooks/instagram")
 @router.post("/webhook/instagram")
 async def instagram_webhook(request: Request):
     """
@@ -261,6 +287,7 @@ async def instagram_webhook(request: Request):
     """
     try:
         payload = await request.json()
+        last_trace_id = None
 
         entries = payload.get("entry", [])
         if not entries:
@@ -273,24 +300,22 @@ async def instagram_webhook(request: Request):
                     sender_id = event.get("sender", {}).get("id", "")
                     text = event["message"]["text"]
 
-                    internal_request = {
-                        "version": "3.0.0",
-                        "input": {"message": text},
-                        "context": {
-                            "platform": "instagram",
-                            "device": "mobile",
-                            "session_id": sender_id,
-                            "voice_input": False,
-                            "preferred_language": "auto",
-                            "detected_language": None
-                        }
-                    }
+                    internal_request = _build_internal_request(
+                        message=text,
+                        platform="instagram",
+                        device="mobile",
+                        session_id=str(sender_id or ""),
+                        voice_input=False,
+                        principal=str(sender_id or ""),
+                    )
 
                     result = await handle_assistant_request(internal_request)
+                    last_trace_id = result.get("trace_id")
                     print(f"Instagram message from {sender_id} processed. Trace: {result.get('trace_id')}")
 
         return {
             "status": "processed",
+            "trace_id": last_trace_id,
             "processed_at": datetime.utcnow().isoformat()
         }
 

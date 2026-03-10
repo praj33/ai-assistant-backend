@@ -5,7 +5,7 @@ Supports: WhatsApp, Email, Instagram, Telegram, Calendar, Reminder, EMS, Device 
 Nothing executes without enforcement ALLOW.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 # Import all platform executors
@@ -51,10 +51,11 @@ class ExecutionService:
             if not scope:
                 scope = "response" if decision == "REWRITE" else "both"
             return EnforcementVerdict(
-                decision=decision if decision in {"ALLOW", "REWRITE", "BLOCK", "TERMINATE"} else "BLOCK",
+                decision=decision if decision in {"ALLOW", "REWRITE", "DELAY", "BLOCK", "TERMINATE"} else "BLOCK",
                 scope=scope if scope in {"response", "action", "both"} else "both",
                 trace_id=str(enforcement_input.get("trace_id") or trace_id),
                 reason_code=str(enforcement_input.get("reason_code") or "RUNTIME_VERDICT_DICT"),
+                request_trace_id=str(enforcement_input.get("request_trace_id") or "") or None,
                 rewrite_class=enforcement_input.get("rewrite_class"),
                 safe_output=enforcement_input.get("safe_output"),
             )
@@ -62,11 +63,59 @@ class ExecutionService:
         decision = str(enforcement_input or "BLOCK").upper()
         scope = "response" if decision == "REWRITE" else "both"
         return EnforcementVerdict(
-            decision=decision if decision in {"ALLOW", "REWRITE", "BLOCK", "TERMINATE"} else "BLOCK",
+            decision=decision if decision in {"ALLOW", "REWRITE", "DELAY", "BLOCK", "TERMINATE"} else "BLOCK",
             scope=scope,
             trace_id=trace_id,
             reason_code="LEGACY_RUNTIME_DECISION",
+            request_trace_id=None,
         )
+
+    @staticmethod
+    def _request_trace_id(verdict: EnforcementVerdict, enforcement_input: Any, trace_id: str) -> str | None:
+        if verdict.request_trace_id:
+            return str(verdict.request_trace_id)
+        if isinstance(enforcement_input, dict):
+            request_trace_id = enforcement_input.get("request_trace_id")
+            if request_trace_id:
+                return str(request_trace_id)
+        return None
+
+    def _bucket_artifact_present(self, trace_id: str) -> bool:
+        from app.services.bucket_service import BucketService
+
+        bucket = BucketService()
+        if not bucket.enforcement_artifact_required():
+            return True
+        return bucket.artifact_exists(trace_id, stage="safety_validation")
+
+    @staticmethod
+    def _sealed_response(
+        *,
+        status: str,
+        action_type: str,
+        reason: str,
+        trace_id: str,
+        verdict: EnforcementVerdict,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        response = {
+            "status": status,
+            "action_type": action_type,
+            "reason": reason,
+            "enforcement": {
+                "decision": verdict.decision,
+                "scope": verdict.scope,
+                "trace_id": verdict.trace_id,
+                "reason_code": verdict.reason_code,
+                "request_trace_id": verdict.request_trace_id,
+            },
+            "trace_id": trace_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "service": "execution_service",
+        }
+        if extra:
+            response.update(extra)
+        return response
         
     def execute_action(self, action_type: str, action_data: Dict[str, Any],
                        trace_id: str, enforcement_decision: Any) -> Dict[str, Any]:
@@ -80,23 +129,80 @@ class ExecutionService:
             # ─── ENFORCEMENT GATE ───
             # Harden execution boundary — never trust caller blindly
             verdict = self._coerce_enforcement_verdict(enforcement_decision, trace_id)
+            if not isinstance(enforcement_decision, (dict, EnforcementVerdict)):
+                return self._sealed_response(
+                    status="blocked",
+                    action_type=action_type,
+                    reason="Action blocked: enforcement payload is not mediation-bound",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                )
+            if not trace_id:
+                return self._sealed_response(
+                    status="blocked",
+                    action_type=action_type,
+                    reason="Action blocked: missing execution trace_id",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                )
+
+            request_trace_id = self._request_trace_id(verdict, enforcement_decision, trace_id)
+            if not request_trace_id:
+                return self._sealed_response(
+                    status="blocked",
+                    action_type=action_type,
+                    reason="Action blocked: missing enforcement request trace chain",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                )
+
+            if request_trace_id != trace_id:
+                return self._sealed_response(
+                    status="blocked",
+                    action_type=action_type,
+                    reason="Action blocked: execution trace does not match enforcement trace chain",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                    extra={"expected_trace_id": request_trace_id},
+                )
+
+            if verdict.decision == "DELAY":
+                return self._sealed_response(
+                    status="scheduled",
+                    action_type=action_type,
+                    reason="Action delayed by enforcement policy",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                )
+
+            if verdict.decision == "REWRITE":
+                return self._sealed_response(
+                    status="rewritten",
+                    action_type=action_type,
+                    reason="Action withheld until rewritten payload is revalidated",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                    extra={"rewritten_action_data": self._apply_rewrite(action_data, action_type)},
+                )
+
             # Phase 5: execution authority gate — ONLY ALLOW may execute real-world actions
             if not verdict.allows_action():
-                return {
-                    "status": "blocked",
-                    "action_type": action_type,
-                    "reason": f"Action blocked by enforcement policy: {verdict.decision}",
-                    "enforcement": {
-                        "decision": verdict.decision,
-                        "scope": verdict.scope,
-                        "trace_id": verdict.trace_id,
-                        "reason_code": verdict.reason_code,
-                    },
-                    "trace_id": trace_id,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "service": "execution_service"
-                }
-            # Note: REWRITE affects responses, not actions; do not execute on REWRITE.
+                return self._sealed_response(
+                    status="blocked",
+                    action_type=action_type,
+                    reason=f"Action blocked by enforcement policy: {verdict.decision}",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                )
+
+            if not self._bucket_artifact_present(trace_id):
+                return self._sealed_response(
+                    status="blocked",
+                    action_type=action_type,
+                    reason="Action blocked: mediation bucket artifact missing",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                )
             
             platform = action_type.lower()
             decision = verdict.decision
