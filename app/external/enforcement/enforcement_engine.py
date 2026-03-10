@@ -8,12 +8,12 @@ Returns ONLY EnforcementVerdict.
 """
 
 from evaluator_modules import ALL_EVALUATORS
-from logs.bucket_logger import log_enforcement
-from config_loader import RUNTIME_CONFIG
-from utils.deterministic_trace import generate_trace_id
 from validators.akanksha.enforcement_adapter import EnforcementAdapter
 
-from enforcement_verdict import EnforcementVerdict
+from .bucket_logger import log_enforcement
+from .config_loader import RUNTIME_CONFIG
+from .deterministic_trace import generate_trace_id
+from .enforcement_verdict import EnforcementVerdict
 
 # STRICT PRIORITY — DO NOT CHANGE
 DECISION_PRIORITY = ["BLOCK", "REWRITE", "EXECUTE"]
