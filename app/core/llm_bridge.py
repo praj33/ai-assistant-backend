@@ -2,8 +2,14 @@ import os
 import asyncio
 import hashlib
 
-from openai import AsyncOpenAI
-from groq import AsyncGroq
+try:
+    from openai import AsyncOpenAI
+except ImportError:
+    AsyncOpenAI = None
+try:
+    from groq import AsyncGroq
+except ImportError:
+    AsyncGroq = None
 try:
     import google.generativeai as genai
 except ImportError:
@@ -19,8 +25,8 @@ class LLMBridge:
         openai_key = os.getenv("OPENAI_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")
 
-        self.openai_client = AsyncOpenAI(api_key=openai_key) if openai_key else None
-        self.groq_client = AsyncGroq(api_key=groq_key) if groq_key else None
+        self.openai_client = AsyncOpenAI(api_key=openai_key) if AsyncOpenAI and openai_key else None
+        self.groq_client = AsyncGroq(api_key=groq_key) if AsyncGroq and groq_key else None
         self.google_key = os.getenv("GOOGLE_API_KEY")
         mistral_key = os.getenv("MISTRAL_API_KEY")
         self.mistral_client = MistralClient(api_key=mistral_key) if MistralClient and mistral_key else None
@@ -44,6 +50,8 @@ class LLMBridge:
             # ----- OPENAI -----
             if model == "chatgpt":
                 if not self.openai_client:
+                    if AsyncOpenAI is None:
+                        raise ImportError("openai package is not installed")
                     raise ValueError("OPENAI_API_KEY is not configured")
                 response = await self.openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
@@ -54,6 +62,8 @@ class LLMBridge:
             # ----- GROQ -----
             elif model == "groq":
                 if not self.groq_client:
+                    if AsyncGroq is None:
+                        raise ImportError("groq package is not installed")
                     raise ValueError("GROQ_API_KEY is not configured")
                 response = await self.groq_client.chat.completions.create(
                     model="mixtral-8x7b-instruct",
