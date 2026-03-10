@@ -2,8 +2,8 @@
 
 ## ✅ Enforcement Service
 
-**Location:** `app/external/enforcement/simple_engine.py`
-**Status:** ✅ Using correct enforcement engine from external folder
+**Location:** `app/external/enforcement/enforcement_engine.py`
+**Status:** ✅ Using Raj’s deterministic enforcement engine (runtime authority)
 **Verified:** Enforcement decisions working correctly (ALLOW/BLOCK/REWRITE)
 
 ## ✅ Behavior Validator (Safety)
@@ -46,7 +46,7 @@
 1. ✅ API Authentication (X-API-Key)
 2. ✅ Safety Service (behavior_validator.py)
 3. ✅ Intelligence Service
-4. ✅ Enforcement Service (simple_engine.py)
+4. ✅ Enforcement Service (enforcement_engine.py)
 5. ✅ Execution Service (email simulation)
 6. ✅ Bucket Service (MongoDB logging)
 7. ✅ Trace ID propagation

@@ -55,7 +55,8 @@ class ExecutionService:
             # ─── ENFORCEMENT GATE ───
             # Harden execution boundary — never trust caller blindly
             decision = str(enforcement_decision or "").upper()
-            if decision not in {"ALLOW", "REWRITE"}:
+            # Phase 5: execution authority gate — ONLY ALLOW may execute real-world actions
+            if decision != "ALLOW":
                 return {
                     "status": "blocked",
                     "action_type": action_type,
@@ -64,10 +65,7 @@ class ExecutionService:
                     "timestamp": datetime.utcnow().isoformat(),
                     "service": "execution_service"
                 }
-            
-            # Apply rewrite if needed
-            if decision == "REWRITE":
-                action_data = self._apply_rewrite(action_data, action_type)
+            # Note: REWRITE affects responses, not actions; do not execute on REWRITE.
             
             platform = action_type.lower()
             gateway_action = "execute"

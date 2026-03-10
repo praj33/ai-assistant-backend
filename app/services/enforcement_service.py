@@ -1,15 +1,58 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
-from app.external.enforcement.simple_engine import EnforcementEngine
+from types import SimpleNamespace
+
+from app.external.enforcement import enforcement_engine
 
 class EnforcementService:
     def __init__(self):
-        self.enforcement_engine = EnforcementEngine()
+        # Deterministic runtime authority (Raj) — single source of truth
+        self.enforcement_engine = enforcement_engine
         
     def enforce_policy(self, payload: Dict[str, Any], trace_id: str) -> Dict[str, Any]:
-        verdict = self.enforcement_engine.enforce(payload)
-        result = verdict.to_dict()
-        result["trace_id"] = trace_id
+        """
+        Runtime enforcement entrypoint.
+        Converts the runtime payload dict into the deterministic engine's expected input shape,
+        calls Raj's `enforcement_engine.enforce()`, then adapts the verdict to the dict
+        surface consumed by the orchestrator.
+        """
+
+        def _ns(data: Optional[Dict[str, Any]]) -> SimpleNamespace:
+            d = data or {}
+            return SimpleNamespace(**d)
+
+        safety = payload.get("safety") or {}
+        intelligence = payload.get("intelligence") or {}
+
+        # Build the attribute-based input payload expected by Raj's engine.
+        input_payload = SimpleNamespace(
+            intent=payload.get("intent") or intelligence.get("intent") or "general",
+            emotional_output=payload.get("user_input") or payload.get("text") or "",
+            age_gate_status=bool(payload.get("age_gate_status", False)),
+            region_policy=payload.get("region_policy"),
+            platform_policy=payload.get("platform_policy") or payload.get("user_context"),
+            karma_score=intelligence.get("karma_score") or payload.get("karma_score") or 0,
+            risk_flags=payload.get("risk_flags")
+            or safety.get("matched_patterns")
+            or [],
+            trace_id=trace_id,
+        )
+
+        verdict = self.enforcement_engine.enforce(input_payload)
+
+        result: Dict[str, Any] = {
+            "decision": getattr(verdict, "decision", "BLOCK"),
+            "scope": getattr(verdict, "scope", "both"),
+            "trace_id": getattr(verdict, "trace_id", trace_id),
+            "reason_code": getattr(verdict, "reason_code", "UNKNOWN"),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        rewrite_class = getattr(verdict, "rewrite_class", None)
+        if rewrite_class:
+            result["rewrite_class"] = rewrite_class
+        safe_output = getattr(verdict, "safe_output", None)
+        if safe_output:
+            result["safe_output"] = safe_output
         return result
     
     def get_status(self) -> Dict[str, Any]:

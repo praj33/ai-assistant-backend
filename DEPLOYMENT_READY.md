@@ -13,7 +13,7 @@
 - ✅ Falls back to message field correctly
 
 ### 3. Component Verification
-- ✅ Enforcement: Using `app/external/enforcement/simple_engine.py`
+- ✅ Enforcement: Using `app/external/enforcement/enforcement_engine.py` (deterministic runtime authority)
 - ✅ Safety: Using `app/external/safety/behavior_validator.py`
 - ✅ All services integrated correctly
 
