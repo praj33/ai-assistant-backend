@@ -1,8 +1,8 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
-from ..core.llm_bridge import llm_bridge
+from pydantic import BaseModel, Field
 from ..core.bhiv_core import BHIVCore
 from ..core.bhiv_reasoner import BHIVReasoner
+from ..core.respond_service import generate_generic_response
 from ..memory.memory_manager import MemoryManager
 from ..agents.planner_agent import PlannerAgent
 from ..agents.researcher_agent import ResearcherAgent
@@ -38,7 +38,7 @@ bhiv = BHIVCore(memory_manager, agents, tools, reasoner)
 
 class RespondRequest(BaseModel):
     query: str
-    context: dict = {}
+    context: dict = Field(default_factory=dict)
     model: str = "uniguru"
     decision: str = "respond"
 
@@ -47,8 +47,11 @@ async def generate_response(request: RespondRequest):
     try:
         if request.decision == "bhiv_core":
             return await bhiv.process(request)
-        prompt = f"Context: {request.context}\nQuery: {request.query}\nProvide a helpful response."
-        response = await llm_bridge.call_llm(request.model, prompt)
+        response = await generate_generic_response(
+            query=request.query,
+            context=request.context,
+            model=request.model,
+        )
         return {"response": response}
     except Exception as e:
         return {"error": f"Failed to generate response: {str(e)}"}

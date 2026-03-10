@@ -1,9 +1,9 @@
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 import json
 import os
 import httpx
-import base64
 from io import BytesIO
+from app.core.respond_service import generate_generic_response, build_fallback_response
 
 class DecisionHub:
     def __init__(self):
@@ -95,17 +95,21 @@ class DecisionHub:
     async def generate_response(self, query: str, intent: str, context: Dict[str, Any] = None, model: str = "uniguru") -> Dict[str, Any]:
         """Generate response using Respond or Summarize API based on intent"""
         try:
-            base_url = os.getenv("BASE_URL", "http://localhost:8000")
-            async with httpx.AsyncClient() as client:
-                headers = {"X-API-Key": os.getenv("API_KEY", "")}
-                if intent == "summarize":
+            if intent == "summarize":
+                base_url = os.getenv("BASE_URL", "http://localhost:8000")
+                async with httpx.AsyncClient() as client:
+                    headers = {"X-API-Key": os.getenv("API_KEY", "")}
                     payload = {"text": query, "model": model}
                     response = await client.post(f"{base_url}/api/summarize", json=payload, headers=headers)
-                else:
-                    payload = {"query": query, "context": context or {}, "model": model}
-                    response = await client.post(f"{base_url}/api/respond", json=payload, headers=headers)
-                response.raise_for_status()
-                return response.json()
+                    response.raise_for_status()
+                    return response.json()
+
+            response_text = await generate_generic_response(
+                query=query,
+                context=context or {},
+                model=model,
+            )
+            return {"response": response_text}
         except httpx.HTTPStatusError as e:
             raise Exception(f"Response API error: {e.response.status_code} - {e.response.text}")
         except Exception as e:
@@ -275,18 +279,6 @@ class DecisionHub:
 
     def simple_response(self, text: str) -> str:
         """Generate a simple synchronous response without async calls"""
-        text_lower = text.lower()
-        
-        # Simple keyword-based responses
-        if "hello" in text_lower or "hi" in text_lower:
-            return "Hello! How can I assist you today?"
-        elif "help" in text_lower:
-            return "I'm here to help! You can ask me questions, request tasks, or get information."
-        elif "thank" in text_lower:
-            return "You're welcome! Is there anything else I can help with?"
-        elif "bye" in text_lower or "goodbye" in text_lower:
-            return "Goodbye! Have a great day!"
-        else:
-            return f"I understand: {text}. How can I help you with that?"
+        return build_fallback_response(text, {})
 
 decision_hub = DecisionHub()

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from app.core.summaryflow import summary_flow
 from app.core.intentflow import intent_flow
 from app.core.taskflow import task_flow
-from app.core.decision_hub import decision_hub
+from app.core.respond_service import generate_generic_response
 from app.core.logging import get_logger
 from app.core.database import get_db
 
@@ -620,7 +620,16 @@ async def handle_assistant_request(request):
                 result_type = "passive"
         
         elif intent.get("intent") == "general":
-            response_text = decision_hub.simple_response(processed_text)
+            response_text = await generate_generic_response(
+                query=processed_text,
+                context={
+                    "platform": getattr(request.context, "platform", "web"),
+                    "device": getattr(request.context, "device", "unknown"),
+                    "preferred_language": getattr(request.context, "preferred_language", "auto"),
+                    "detected_language": detected_language,
+                    "session_id": getattr(request.context, "session_id", None),
+                },
+            )
             result_type = "passive"
         else:
             try:
@@ -629,7 +638,16 @@ async def handle_assistant_request(request):
                 result_type = "workflow"
             except Exception as e:
                 logger.warning(f"[{trace_id}] Task building failed: {e}. Using default response.")
-                response_text = decision_hub.simple_response(processed_text)
+                response_text = await generate_generic_response(
+                    query=processed_text,
+                    context={
+                        "platform": getattr(request.context, "platform", "web"),
+                        "device": getattr(request.context, "device", "unknown"),
+                        "preferred_language": getattr(request.context, "preferred_language", "auto"),
+                        "detected_language": detected_language,
+                        "session_id": getattr(request.context, "session_id", None),
+                    },
+                )
                 result_type = "passive"
                 task = None
         

@@ -16,10 +16,14 @@ except ImportError:
 
 class LLMBridge:
     def __init__(self):
-        self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
+        openai_key = os.getenv("OPENAI_API_KEY")
+        groq_key = os.getenv("GROQ_API_KEY")
+
+        self.openai_client = AsyncOpenAI(api_key=openai_key) if openai_key else None
+        self.groq_client = AsyncGroq(api_key=groq_key) if groq_key else None
         self.google_key = os.getenv("GOOGLE_API_KEY")
-        self.mistral_client = MistralClient(api_key=os.getenv("MISTRAL_API_KEY")) if MistralClient else None
+        mistral_key = os.getenv("MISTRAL_API_KEY")
+        self.mistral_client = MistralClient(api_key=mistral_key) if MistralClient and mistral_key else None
 
         if genai and self.google_key:
             genai.configure(api_key=self.google_key)
@@ -39,6 +43,8 @@ class LLMBridge:
         try:
             # ----- OPENAI -----
             if model == "chatgpt":
+                if not self.openai_client:
+                    raise ValueError("OPENAI_API_KEY is not configured")
                 response = await self.openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[{"role": "user", "content": prompt}]
@@ -47,6 +53,8 @@ class LLMBridge:
 
             # ----- GROQ -----
             elif model == "groq":
+                if not self.groq_client:
+                    raise ValueError("GROQ_API_KEY is not configured")
                 response = await self.groq_client.chat.completions.create(
                     model="mixtral-8x7b-instruct",
                     messages=[{"role": "user", "content": prompt}]
