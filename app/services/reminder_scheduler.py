@@ -68,7 +68,15 @@ class ReminderScheduler:
             reminder_id = reminder.get("reminder_id", "")
             message = reminder.get("message", "")
 
-            trace_id = generate_trace_id()
+            trace_id = generate_trace_id(
+                {
+                    "source": "reminder_scheduler",
+                    "reminder_id": reminder_id,
+                    "message": message,
+                    "user_id": reminder.get("user_id", ""),
+                    "remind_at": reminder.get("remind_at"),
+                }
+            )
             self.bucket.log_event(trace_id, "reminder_due", {"reminder": reminder})
 
             safety_result = self.safety.validate_content(content=message, trace_id=trace_id)

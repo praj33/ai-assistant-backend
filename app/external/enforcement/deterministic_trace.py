@@ -10,10 +10,10 @@ from typing import Any
 
 
 def generate_trace_id(
-    *,
     input_payload: dict[str, Any],
-    enforcement_category: str,
+    enforcement_category: str = "REQUEST",
     salt: str | None = None,
+    prefix: str | None = None,
 ) -> str:
     canonical = {
         "input_payload": input_payload,
@@ -27,4 +27,6 @@ def generate_trace_id(
         ensure_ascii=True,
     ).encode("utf-8")
     digest = hashlib.sha256(blob).hexdigest()[:16]
-    return f"enf_{digest}"
+    if prefix is None:
+        prefix = "trace" if str(enforcement_category).upper() == "REQUEST" else "enf"
+    return f"{prefix}_{digest}"

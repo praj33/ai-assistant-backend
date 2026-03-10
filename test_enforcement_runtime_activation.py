@@ -40,6 +40,38 @@ def _extract_trace_id(response_json: dict) -> str:
     return str(response_json["result"]["enforcement"]["request_trace_id"])
 
 
+def _extract_enforcement_result(result: dict) -> dict:
+    if result.get("status") == "success":
+        return result["result"]["enforcement"]
+    return result["error"]["enforcement"]
+
+
+def _verdict_snapshot(result: dict) -> dict:
+    enforcement = _extract_enforcement_result(result)
+    return {
+        "decision": enforcement.get("decision"),
+        "scope": enforcement.get("scope"),
+        "reason_code": enforcement.get("reason_code"),
+        "trace_id": enforcement.get("trace_id"),
+        "request_trace_id": enforcement.get("request_trace_id"),
+        "rewrite_class": enforcement.get("rewrite_class"),
+        "safe_output": enforcement.get("safe_output"),
+    }
+
+
+def _stage_sequence(trace_id: str) -> list[str]:
+    bucket = BucketService()
+    logs = bucket.get_trace_logs(trace_id) or []
+    stages: list[str] = []
+    for entry in logs:
+        stage = entry.get("stage")
+        if not stage:
+            stage = entry.get("data_after", {}).get("stage")
+        if stage:
+            stages.append(str(stage))
+    return stages
+
+
 async def _run_case(name: str, message: str, *, session_id: str) -> dict:
     request = {
         "version": "3.0.0",
@@ -91,6 +123,8 @@ async def main() -> int:
         "precondition_checks": [],
         "execution_checks": [],
         "channel_checks": [],
+        "replay_stability": {},
+        "runtime_demo": {},
     }
 
     results["cases"].append(
@@ -124,6 +158,41 @@ async def main() -> int:
         )
     )
     os.environ.pop("AKANKSHA_VALIDATOR_FAIL", None)
+
+    replay_first = await _run_case(
+        "replay_reference_first",
+        "hello deterministic replay",
+        session_id="trace_case_replay",
+    )
+    replay_second = await _run_case(
+        "replay_reference_second",
+        "hello deterministic replay",
+        session_id="trace_case_replay",
+    )
+    replay_first_snapshot = _verdict_snapshot(replay_first["result"])
+    replay_second_snapshot = _verdict_snapshot(replay_second["result"])
+    results["replay_stability"] = {
+        "first": replay_first_snapshot,
+        "second": replay_second_snapshot,
+        "identical_trace_id": replay_first["result"]["trace_id"] == replay_second["result"]["trace_id"],
+        "identical_decision": replay_first_snapshot["decision"] == replay_second_snapshot["decision"],
+        "identical_verdict": replay_first_snapshot == replay_second_snapshot,
+    }
+
+    runtime_demo_case = await _run_case(
+        "runtime_chain_allow_execute",
+        "send telegram to 1657991703 saying hello from runtime demo",
+        session_id="trace_case_demo_execute",
+    )
+    runtime_demo_trace_id = runtime_demo_case["result"]["trace_id"]
+    runtime_demo_result = runtime_demo_case["result"]
+    runtime_demo_execution = runtime_demo_result.get("result", {}).get("execution") or {}
+    results["runtime_demo"] = {
+        "trace_id": runtime_demo_trace_id,
+        "decision": _extract_enforcement_result(runtime_demo_result).get("decision"),
+        "execution_status": runtime_demo_execution.get("status"),
+        "stages": _stage_sequence(runtime_demo_trace_id),
+    }
 
     enforcement = EnforcementService()
     results["precondition_checks"] = [
@@ -312,10 +381,7 @@ async def main() -> int:
     verdicts = {}
     for case in results["cases"]:
         result = case["result"]
-        if result["status"] == "success":
-            verdicts[case["case"]] = result["result"]["enforcement"]["decision"]
-        else:
-            verdicts[case["case"]] = result["error"]["enforcement"]["decision"]
+        verdicts[case["case"]] = _extract_enforcement_result(result)["decision"]
 
     if verdicts.get("safe_message_allow") != "ALLOW":
         return 2
@@ -355,6 +421,30 @@ async def main() -> int:
             return 16
         if not channel["enforcement_logged"] or not channel["mediation_logged"]:
             return 17
+
+    replay = results["replay_stability"]
+    if not replay.get("identical_trace_id"):
+        return 18
+    if not replay.get("identical_decision"):
+        return 19
+    if not replay.get("identical_verdict"):
+        return 20
+
+    runtime_demo = results["runtime_demo"]
+    required_stages = [
+        "request_received",
+        "safety_validation",
+        "intelligence_processing",
+        "enforcement_decision",
+        "action_execution",
+        "response_generated",
+    ]
+    if runtime_demo.get("decision") != "ALLOW":
+        return 21
+    if runtime_demo.get("execution_status") != "success":
+        return 22
+    if any(stage not in runtime_demo.get("stages", []) for stage in required_stages):
+        return 23
 
     return 0
 

@@ -1,7 +1,5 @@
 from datetime import datetime
 import hashlib
-import uuid
-import json
 import traceback
 from typing import Dict, Any, Optional
 from types import SimpleNamespace
@@ -21,6 +19,9 @@ from app.services.bucket_service import BucketService
 from app.services.execution_service import ExecutionService
 from app.services.multilingual_service import MultilingualService
 from app.services.audio_service import AudioService
+from app.external.enforcement.deterministic_trace import (
+    generate_trace_id as generate_deterministic_trace_id,
+)
 
 logger = get_logger(__name__)
 
@@ -150,9 +151,52 @@ def _build_platform_policy(context, authenticated_user_context: Dict[str, Any]) 
 
     return platform_policy or None
 
-def generate_trace_id() -> str:
-    """Generate unique trace ID for request tracking"""
-    return f"trace_{uuid.uuid4().hex[:12]}"
+def _audio_fingerprint(audio_data: Any) -> Optional[str]:
+    if isinstance(audio_data, (bytes, bytearray)) and audio_data:
+        return hashlib.sha256(audio_data).hexdigest()
+    return None
+
+
+def _canonical_request_trace_payload(
+    *,
+    request: Any,
+    authenticated_user_context: Dict[str, Any],
+    platform_policy: Optional[Dict[str, Any]],
+    audio_fingerprint: Optional[str],
+) -> Dict[str, Any]:
+    input_payload = getattr(request, "input", SimpleNamespace())
+    context = getattr(request, "context", SimpleNamespace())
+
+    summarized_payload = _to_plain(getattr(input_payload, "summarized_payload", None))
+    region_policy = _to_plain(getattr(context, "region_policy", None))
+
+    return {
+        "version": getattr(request, "version", "3.0.0") or "3.0.0",
+        "input": {
+            "message": getattr(input_payload, "message", None) or "",
+            "summarized_payload": summarized_payload if summarized_payload else None,
+            "audio_fingerprint": audio_fingerprint,
+        },
+        "context": {
+            "platform": getattr(context, "platform", None) or "web",
+            "device": getattr(context, "device", None) or "unknown",
+            "session_id": getattr(context, "session_id", None) or "",
+            "voice_input": bool(getattr(context, "voice_input", False)),
+            "preferred_language": getattr(context, "preferred_language", None) or "auto",
+            "age_gate_status": bool(getattr(context, "age_gate_status", False)),
+            "region_policy": region_policy,
+            "platform_policy": platform_policy or {},
+            "authenticated_user_context": authenticated_user_context or {},
+        },
+    }
+
+
+def generate_trace_id(canonical_payload: Dict[str, Any]) -> str:
+    """Generate a deterministic request trace from the canonical runtime payload."""
+    return generate_deterministic_trace_id(
+        input_payload=canonical_payload,
+        enforcement_category="REQUEST",
+    )
 
 def extract_action_parameters(text: str, action_type: str) -> Dict[str, Any]:
     """Extract action parameters from user text for all supported platforms"""
@@ -331,18 +375,27 @@ async def handle_assistant_request(request):
     Enhanced with robust error handling and fail-closed behavior
     """
     request = _normalize_request(request)
-    
-    # Generate trace ID for entire request chain
-    trace_id = generate_trace_id()
-    
+
     # Validate request structure first
     if not hasattr(request, 'input') or not hasattr(request, 'context'):
+        trace_id = generate_trace_id({"invalid_request": _to_plain(request)})
         return error_response(
             "INVALID_REQUEST_STRUCTURE",
             "Request must have input and context fields",
             trace_id
         )
-    
+
+    authenticated_user_context = _build_authenticated_user_context(request.context)
+    platform_policy = _build_platform_policy(request.context, authenticated_user_context)
+    trace_id = generate_trace_id(
+        _canonical_request_trace_payload(
+            request=request,
+            authenticated_user_context=authenticated_user_context,
+            platform_policy=platform_policy,
+            audio_fingerprint=_audio_fingerprint(getattr(request.input, "audio_data", None)),
+        )
+    )
+
     try:
         # -------------------------------
         # Input normalization & logging
@@ -394,8 +447,6 @@ async def handle_assistant_request(request):
             "context": request.context.dict() if hasattr(request.context, 'dict') else str(request.context),
             "timestamp": datetime.utcnow().isoformat()
         })
-        authenticated_user_context = _build_authenticated_user_context(request.context)
-        platform_policy = _build_platform_policy(request.context, authenticated_user_context)
         safety_context = {
             "age_gate_status": bool(getattr(request.context, "age_gate_status", False)),
             "region_rule_status": getattr(request.context, "region_policy", None),
@@ -423,15 +474,27 @@ async def handle_assistant_request(request):
         # STEP 3: ENFORCEMENT (Raj)
         # -------------------------------
         logger.info(f"[{trace_id}] Calling Enforcement Service")
+        raw_risk_flags = intelligence_result.get("risk_flags", [])
+        if isinstance(raw_risk_flags, str):
+            raw_risk_flags = [raw_risk_flags]
+        elif not isinstance(raw_risk_flags, list):
+            raw_risk_flags = [raw_risk_flags] if raw_risk_flags else []
+
+        raw_karma_score = intelligence_result.get("karma_score")
+        karma_score = int(raw_karma_score) if isinstance(raw_karma_score, (int, float)) else 50
+
         enforcement_payload = {
             "safety": safety_result,
             "intelligence": intelligence_result,
             "user_input": text,
-            "intent": "general",  # Will be enhanced later
+            "emotional_output": text,
+            "intent": intelligence_result.get("intent") or "general",
             "trace_id": trace_id,
             "age_gate_status": bool(getattr(request.context, "age_gate_status", False)),
             "region_policy": getattr(request.context, "region_policy", None),
             "platform_policy": platform_policy,
+            "karma_score": karma_score,
+            "risk_flags": raw_risk_flags,
             "authenticated_user_context": authenticated_user_context,
             "user_context": authenticated_user_context,
         }

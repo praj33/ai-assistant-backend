@@ -36,13 +36,26 @@ class EnforcementService:
         return platform_policy or authenticated_user_context
 
     @staticmethod
-    def _extract_risk_flags(payload: Dict[str, Any]) -> list[Any]:
-        risk_flags = payload.get("risk_flags") or []
+    def _extract_risk_flags(payload: Dict[str, Any], intelligence: Dict[str, Any]) -> list[Any]:
+        risk_flags = payload.get("risk_flags")
+        if risk_flags is None:
+            risk_flags = intelligence.get("risk_flags") or []
         if isinstance(risk_flags, str):
             return [risk_flags]
         if isinstance(risk_flags, list):
             return risk_flags
         return [risk_flags]
+
+    @staticmethod
+    def _normalize_karma_score(payload: Dict[str, Any], intelligence: Dict[str, Any]) -> int:
+        raw_value = payload.get("karma_score")
+        if raw_value is None:
+            raw_value = intelligence.get("karma_score")
+        if isinstance(raw_value, bool):
+            return int(raw_value)
+        if isinstance(raw_value, (int, float)):
+            return int(raw_value)
+        return 50
 
     def _bucket_preconditions(self, trace_id: str | None) -> Dict[str, Any]:
         from app.services.bucket_service import BucketService
@@ -72,12 +85,17 @@ class EnforcementService:
 
         input_payload = SimpleNamespace(
             intent=payload.get("intent") or intelligence.get("intent") or "general",
-            emotional_output=payload.get("user_input") or payload.get("text") or "",
+            emotional_output=(
+                payload.get("emotional_output")
+                or payload.get("user_input")
+                or payload.get("text")
+                or ""
+            ),
             age_gate_status=bool(payload.get("age_gate_status", False)),
             region_policy=payload.get("region_policy"),
             platform_policy=self._compose_platform_policy(payload),
-            karma_score=intelligence.get("karma_score") or payload.get("karma_score") or 0,
-            risk_flags=self._extract_risk_flags(payload),
+            karma_score=self._normalize_karma_score(payload, intelligence),
+            risk_flags=self._extract_risk_flags(payload, intelligence),
             trace_id=request_trace_id,
             akanksha_validation=safety if isinstance(safety, dict) else None,
             mediation_decision=safety.get("decision") if isinstance(safety, dict) else None,
