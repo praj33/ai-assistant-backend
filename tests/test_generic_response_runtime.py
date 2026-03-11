@@ -82,3 +82,43 @@ def test_assistant_runtime_uses_improved_generic_response(monkeypatch):
     assert "i understand:" not in text
     assert "how can i help you with that?" not in text
     assert "location" in text or "city" in text
+
+
+def test_assistant_runtime_handles_swagger_style_payload_without_internal_error(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+
+    response = client.post(
+        "/api/assistant",
+        json={
+            "version": "3.0.0",
+            "input": {
+                "message": "hello",
+                "summarized_payload": {},
+                "audio_data": "string",
+                "audio_format": "mp3",
+            },
+            "context": {
+                "platform": "web",
+                "device": "desktop",
+                "session_id": "swagger_session",
+                "voice_input": False,
+                "preferred_language": "auto",
+                "detected_language": "string",
+                "audio_input_data": "string",
+                "audio_output_requested": False,
+                "age_gate_status": False,
+                "region_policy": {},
+                "platform_policy": {},
+                "user_context": {},
+                "authenticated_user_context": {},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert body["result"]["enforcement"]["decision"] in {"ALLOW", "REWRITE", "BLOCK"}

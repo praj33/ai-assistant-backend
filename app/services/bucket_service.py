@@ -82,7 +82,7 @@ class BucketService:
                 "service": "bucket_service",
             }
             BucketService._memory_logs.append(log_entry)
-            if self.audit_middleware and self.audit_middleware.audit_collection:
+            if self.audit_middleware is not None and self.audit_middleware.audit_collection is not None:
                 self.audit_middleware.audit_collection.insert_one(
                     {
                         "timestamp": datetime.utcnow(),
@@ -115,7 +115,7 @@ class BucketService:
             return dict(entry)
 
         try:
-            if self.audit_middleware and self.audit_middleware.audit_collection:
+            if self.audit_middleware is not None and self.audit_middleware.audit_collection is not None:
                 query: Dict[str, Any] = {"artifact_id": trace_id}
                 if stage is not None:
                     query["stage"] = stage
@@ -177,7 +177,7 @@ class BucketService:
 
     def get_trace_logs(self, trace_id: str) -> Optional[list]:
         try:
-            if self.audit_middleware and self.audit_middleware.audit_collection:
+            if self.audit_middleware is not None and self.audit_middleware.audit_collection is not None:
                 logs = list(
                     self.audit_middleware.audit_collection.find({"artifact_id": trace_id}).sort("timestamp", -1)
                 )

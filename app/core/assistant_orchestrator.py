@@ -157,6 +157,16 @@ def _audio_fingerprint(audio_data: Any) -> Optional[str]:
     return None
 
 
+def _is_placeholder_audio(audio_data: Any) -> bool:
+    if not isinstance(audio_data, (bytes, bytearray)):
+        return False
+    if not audio_data:
+        return True
+
+    stripped = bytes(audio_data).strip().lower()
+    return stripped in {b"string", b'""', b"''", b"null", b"none"}
+
+
 def _canonical_request_trace_payload(
     *,
     request: Any,
@@ -403,15 +413,19 @@ async def handle_assistant_request(request):
         
         # Handle audio input if provided (skip placeholder values from Swagger UI)
         audio_data = getattr(request.input, 'audio_data', None)
-        if audio_data and isinstance(audio_data, bytes) and len(audio_data) > 0:
+        if audio_data and isinstance(audio_data, bytes) and len(audio_data) > 0 and not _is_placeholder_audio(audio_data):
             # Convert speech to text using audio service
             try:
-                text = audio_service.speech_to_text(
+                transcribed_text = audio_service.speech_to_text(
                     audio_data=audio_data,
                     language=request.context.preferred_language if request.context.preferred_language != "auto" else "en"
                 )
-                # Set voice input flag
-                request.context.voice_input = True
+                if transcribed_text and transcribed_text.strip():
+                    text = transcribed_text
+                    # Set voice input flag
+                    request.context.voice_input = True
+                else:
+                    text = getattr(request.input, 'message', None) or ""
             except Exception as e:
                 logger.warning(f"[{trace_id}] Audio conversion failed: {str(e)}, falling back to message")
                 # Fall back to message if audio fails
@@ -449,7 +463,7 @@ async def handle_assistant_request(request):
         })
         safety_context = {
             "age_gate_status": bool(getattr(request.context, "age_gate_status", False)),
-            "region_rule_status": getattr(request.context, "region_policy", None),
+            "region_rule_status": _to_plain(getattr(request.context, "region_policy", None)),
             "platform_policy_state": platform_policy,
         }
         
@@ -491,7 +505,7 @@ async def handle_assistant_request(request):
             "intent": intelligence_result.get("intent") or "general",
             "trace_id": trace_id,
             "age_gate_status": bool(getattr(request.context, "age_gate_status", False)),
-            "region_policy": getattr(request.context, "region_policy", None),
+            "region_policy": _to_plain(getattr(request.context, "region_policy", None)),
             "platform_policy": platform_policy,
             "karma_score": karma_score,
             "risk_flags": raw_risk_flags,
