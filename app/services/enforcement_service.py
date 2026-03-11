@@ -62,11 +62,52 @@ class EnforcementService:
 
         bucket = BucketService()
         bucket_active = bucket.enforcement_artifact_required()
-        artifact_present = bool(trace_id) and bucket.artifact_exists(trace_id, stage="safety_validation")
+        artifact_present = bool(trace_id) and bucket.validate_artifact(
+            trace_id,
+            stage="safety_validation",
+            required_fields=("decision", "trace_id"),
+            expected_trace_id=trace_id,
+        )
         return {
             "bucket_active": bucket_active,
             "mediation_artifact_present": artifact_present,
         }
+
+    @staticmethod
+    def _emit_enforcement_telemetry(
+        *,
+        request_trace_id: str | None,
+        result: Dict[str, Any],
+        safety: Dict[str, Any],
+        input_payload: SimpleNamespace,
+        bucket_preconditions: Dict[str, Any],
+    ) -> None:
+        from app.services.bucket_service import BucketService
+
+        telemetry_payload = {
+            "event_type": "enforcement_decision",
+            "telemetry_version": "1.0",
+            "decision": result["decision"],
+            "scope": result["scope"],
+            "reason_code": result["reason_code"],
+            "trace_id": result["trace_id"],
+            "request_trace_id": result["request_trace_id"],
+            "intent": input_payload.intent,
+            "risk_flags": list(input_payload.risk_flags),
+            "risk_flag_count": len(input_payload.risk_flags),
+            "karma_score": input_payload.karma_score,
+            "mediation_decision": input_payload.mediation_decision,
+            "mediation_trace_id": input_payload.mediation_trace_id,
+            "safety_risk_category": safety.get("risk_category") if isinstance(safety, dict) else None,
+            "bucket_active": bucket_preconditions["bucket_active"],
+            "mediation_artifact_valid": bucket_preconditions["mediation_artifact_present"],
+        }
+
+        BucketService().log_event(
+            request_trace_id or result["trace_id"],
+            "enforcement_telemetry",
+            telemetry_payload,
+        )
 
     def enforce_policy(self, payload: Dict[str, Any], trace_id: str) -> Dict[str, Any]:
         """
@@ -124,6 +165,14 @@ class EnforcementService:
         if safe_output:
             result["safe_output"] = safe_output
             result["rewritten_output"] = safe_output
+
+        self._emit_enforcement_telemetry(
+            request_trace_id=request_trace_id,
+            result=result,
+            safety=safety,
+            input_payload=input_payload,
+            bucket_preconditions=bucket_preconditions,
+        )
 
         return result
 

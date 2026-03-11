@@ -86,7 +86,12 @@ class ExecutionService:
         bucket = BucketService()
         if not bucket.enforcement_artifact_required():
             return True
-        return bucket.artifact_exists(trace_id, stage="safety_validation")
+        return bucket.validate_artifact(
+            trace_id,
+            stage="safety_validation",
+            required_fields=("decision", "trace_id"),
+            expected_trace_id=trace_id,
+        )
 
     @staticmethod
     def _sealed_response(

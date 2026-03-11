@@ -1,7 +1,8 @@
 import json
 import os
+import hashlib
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Iterable
 
 from app.external.bucket.database.mongo_db import MongoDBClient
 from app.external.bucket.middleware.audit_middleware import AuditMiddleware
@@ -22,6 +23,42 @@ class BucketService:
     def clear_memory_logs(cls) -> None:
         cls._memory_logs.clear()
 
+    @staticmethod
+    def _normalize_value(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {str(key): BucketService._normalize_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [BucketService._normalize_value(item) for item in value]
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        return str(value)
+
+    @classmethod
+    def _integrity_hash(cls, trace_id: str, stage: str, data: Dict[str, Any]) -> str:
+        canonical = {
+            "trace_id": str(trace_id),
+            "stage": str(stage),
+            "data": cls._normalize_value(data),
+        }
+        blob = json.dumps(
+            canonical,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("utf-8")
+        return hashlib.sha256(blob).hexdigest()
+
+    @staticmethod
+    def _field_present(data: Dict[str, Any], field_path: str) -> bool:
+        current: Any = data
+        for segment in field_path.split("."):
+            if not isinstance(current, dict) or segment not in current:
+                return False
+            current = current[segment]
+        return True
+
     def __init__(self):
         self.logger = get_logger(__name__)
         self.mongo_client = MongoDBClient()
@@ -34,10 +71,13 @@ class BucketService:
 
     def log_event(self, trace_id: str, stage: str, data: Dict[str, Any]) -> bool:
         try:
+            normalized_data = self._normalize_value(data)
             log_entry = {
                 "trace_id": trace_id,
                 "stage": stage,
-                "data": data,
+                "data": normalized_data,
+                "integrity_hash": self._integrity_hash(trace_id, stage, normalized_data),
+                "integrity_version": "sha256-v1",
                 "timestamp": datetime.utcnow().isoformat(),
                 "service": "bucket_service",
             }
@@ -63,26 +103,77 @@ class BucketService:
             self.logger.error("Bucket logging failed for %s: %s", trace_id, exc)
             return False
 
-    def artifact_exists(self, trace_id: str, *, stage: Optional[str] = None) -> bool:
+    def get_artifact(self, trace_id: str, *, stage: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if not trace_id:
-            return False
+            return None
 
-        if any(
-            entry.get("trace_id") == trace_id and (stage is None or entry.get("stage") == stage)
-            for entry in BucketService._memory_logs
-        ):
-            return True
+        for entry in reversed(BucketService._memory_logs):
+            if entry.get("trace_id") != trace_id:
+                continue
+            if stage is not None and entry.get("stage") != stage:
+                continue
+            return dict(entry)
 
         try:
             if self.audit_middleware and self.audit_middleware.audit_collection:
                 query: Dict[str, Any] = {"artifact_id": trace_id}
                 if stage is not None:
                     query["stage"] = stage
-                return self.audit_middleware.audit_collection.find_one(query) is not None
+                doc = self.audit_middleware.audit_collection.find_one(
+                    query,
+                    sort=[("timestamp", -1)],
+                )
+                if doc:
+                    payload = doc.get("data_after")
+                    if isinstance(payload, dict):
+                        return dict(payload)
         except Exception as exc:
-            self.logger.error("Failed to validate artifact for %s: %s", trace_id, exc)
+            self.logger.error("Failed to retrieve artifact for %s: %s", trace_id, exc)
 
-        return False
+        return None
+
+    def artifact_exists(self, trace_id: str, *, stage: Optional[str] = None) -> bool:
+        return self.get_artifact(trace_id, stage=stage) is not None
+
+    def validate_artifact(
+        self,
+        trace_id: str,
+        *,
+        stage: str,
+        required_fields: Optional[Iterable[str]] = None,
+        expected_trace_id: Optional[str] = None,
+    ) -> bool:
+        artifact = self.get_artifact(trace_id, stage=stage)
+        if not artifact:
+            return False
+
+        data = artifact.get("data")
+        if not isinstance(data, dict):
+            return False
+
+        integrity_hash = artifact.get("integrity_hash")
+        if not integrity_hash:
+            return False
+
+        expected_hash = self._integrity_hash(
+            str(artifact.get("trace_id", trace_id)),
+            str(artifact.get("stage", stage)),
+            data,
+        )
+        if integrity_hash != expected_hash:
+            return False
+
+        if expected_trace_id is not None:
+            embedded_trace_id = data.get("trace_id")
+            if str(embedded_trace_id or "") != str(expected_trace_id):
+                return False
+
+        if required_fields:
+            for field_path in required_fields:
+                if not self._field_present(data, field_path):
+                    return False
+
+        return True
 
     def get_trace_logs(self, trace_id: str) -> Optional[list]:
         try:
