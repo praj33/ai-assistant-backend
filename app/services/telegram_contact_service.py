@@ -29,7 +29,7 @@ class TelegramContactService:
 
     @property
     def collection(self):
-        if self.mongo_client and self.mongo_client.db is not None:
+        if self.mongo_client is not None and self.mongo_client.db is not None:
             return self.mongo_client.db.get_collection("telegram_contacts")
         return None
 
@@ -62,7 +62,7 @@ class TelegramContactService:
 
         # Best-effort Mongo persistence
         coll = self.collection
-        if coll:
+        if coll is not None:
             try:
                 coll.update_one(
                     {"chat_id": int(chat_id)},
@@ -102,7 +102,7 @@ class TelegramContactService:
 
         # Check Mongo if available
         coll = self.collection
-        if coll:
+        if coll is not None:
             try:
                 doc = coll.find_one({"username": username})
                 if doc and "chat_id" in doc:
@@ -126,7 +126,7 @@ class TelegramContactService:
         coll = self.collection
         contacts: List[Dict[str, Any]] = []
 
-        if coll:
+        if coll is not None:
             try:
                 for doc in coll.find({}, {"_id": 0}):
                     contacts.append(

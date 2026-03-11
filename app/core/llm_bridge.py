@@ -59,7 +59,8 @@ class LLMBridge:
                     raise ValueError("OPENAI_API_KEY is not configured")
                 response = await self.openai_client.chat.completions.create(
                     model="gpt-3.5-turbo",
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
                 )
                 output = response.choices[0].message.content
 
@@ -71,7 +72,8 @@ class LLMBridge:
                     raise ValueError("GROQ_API_KEY is not configured")
                 response = await self.groq_client.chat.completions.create(
                     model=self.groq_model,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
                 )
                 output = response.choices[0].message.content
 
@@ -80,7 +82,11 @@ class LLMBridge:
                 if not genai:
                     raise ImportError("google-generativeai not installed")
                 gemini_model = genai.GenerativeModel("gemini-pro")
-                result = await asyncio.to_thread(gemini_model.generate_content, prompt)
+                result = await asyncio.to_thread(
+                    gemini_model.generate_content,
+                    prompt,
+                    generation_config={"temperature": 0},
+                )
                 output = result.text
 
             # ----- MISTRAL -----
@@ -91,6 +97,7 @@ class LLMBridge:
                     self.mistral_client.chat,
                     model="mistral-medium",
                     messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
                 )
                 output = result.choices[0].message["content"]
 

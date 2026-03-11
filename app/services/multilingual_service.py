@@ -1,3 +1,4 @@
+import re
 from typing import Dict, Any, Optional
 from datetime import datetime
 import langdetect
@@ -11,12 +12,51 @@ class MultilingualService:
         """
         Detect the language of the input text
         """
+        normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
+        if self._is_short_english_utterance(normalized):
+            return "en"
+
         try:
             detected = langdetect.detect(text)
             return detected
         except:
             # Default to English if detection fails
             return "en"
+
+    @staticmethod
+    def _is_short_english_utterance(text: str) -> bool:
+        if not text:
+            return True
+
+        if not text.isascii():
+            return False
+
+        short_phrases = {
+            "hi",
+            "hello",
+            "hey",
+            "thanks",
+            "thank you",
+            "bye",
+            "goodbye",
+            "who are you",
+            "what is your name",
+            "what's your name",
+            "what can you do",
+            "how are you",
+        }
+        if text in short_phrases:
+            return True
+
+        words = [part for part in text.split(" ") if part]
+        greeting_tokens = {"hi", "hello", "hey"}
+        if words and words[0] in greeting_tokens and len(words) <= 4:
+            return True
+
+        if len(words) <= 3 and all(word in {"hi", "hello", "hey", "thanks", "bye"} for word in words):
+            return True
+
+        return False
     
     def translate_text(self, text: str, target_lang: str, source_lang: str = None) -> str:
         """

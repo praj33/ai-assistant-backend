@@ -136,6 +136,9 @@ class PatternLibrary:
             (r'\bterrorist.*attack\b', 99, "Terrorist attack"),
             (r'\bmass.*shooting\b', 98, "Mass violence"),
             (r'\bviolent.*attack\b', 96, "Violence planning"),
+            (r'\bi\s+will\s+rape\s+you\b', 99, "Explicit sexual violence threat"),
+            (r"\bi(?:\s+am|'m)?\s+going\s+to\s+rape\s+you\b", 99, "Explicit sexual violence threat"),
+            (r'\brape\s+you\b', 97, "Sexual violence threat"),
 
             # Explicit illegal-activity intent (defense-in-depth)
             (r'\bcommit\s+illegal\s+activity\b', 92, "Illegal activity intent"),
@@ -151,6 +154,10 @@ class PatternLibrary:
         # SEXUAL_ESCALATION_ATTEMPT patterns
         RiskCategory.SEXUAL_ESCALATION_ATTEMPT: [
             (r'\bsend me nudes\b', 94, "Nude photo request"),
+            (r'\bsend (?:me )?(?:a |some )?nude (?:photo|photos|pic|pics|picture|pictures)\b', 95, "Nude photo request"),
+            (r'\bi want (?:a |some )?nude (?:photo|photos|pic|pics|picture|pictures)\b', 95, "Nude photo request"),
+            (r'\bi need (?:a |some )?nude (?:photo|photos|pic|pics|picture|pictures)\b', 94, "Nude photo request"),
+            (r'\bshare (?:a |some )?nude (?:photo|photos|pic|pics|picture|pictures)\b', 94, "Nude photo request"),
             (r'\bmeet up alone tonight\b', 88, "Alone meeting request"),
             (r'\bwhat do you look like.*imagining us together\b', 92, "Physical fantasy"),
             (r'\btell me something sexy\b', 90, "Sexual content request"),

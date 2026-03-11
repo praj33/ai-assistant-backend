@@ -115,6 +115,33 @@ def _normalize_request(request):
     return req
 
 
+def _requires_crisis_response(safety_result: Dict[str, Any]) -> bool:
+    original_output = str(safety_result.get("original_output") or "").lower()
+    matched_patterns = " ".join(str(item) for item in (safety_result.get("matched_patterns") or [])).lower()
+    corpus = f"{original_output} {matched_patterns}"
+    crisis_tokens = (
+        "kill myself",
+        "suicide",
+        "hurt myself",
+        "harm myself",
+        "end my life",
+        "want to die",
+        "jump from",
+        "self-harm",
+        "self harm",
+    )
+    return any(token in corpus for token in crisis_tokens)
+
+
+def _blocked_response_text(safety_result: Dict[str, Any]) -> str:
+    safe_output = str(safety_result.get("safe_output") or "").strip()
+    if _requires_crisis_response(safety_result):
+        return CRISIS_SAFE_RESPONSE
+    if safe_output:
+        return safe_output
+    return "I can't assist with that request."
+
+
 def _build_authenticated_user_context(context) -> Dict[str, Any]:
     raw_context = getattr(context, "authenticated_user_context", None)
     if raw_context is None:
@@ -532,11 +559,7 @@ async def handle_assistant_request(request):
             })
             return success_response(
                 result_type="passive",
-                response_text=(
-                    CRISIS_SAFE_RESPONSE
-                    if safety_result.get("decision") == "hard_deny"
-                    else safety_result.get("safe_output") or CRISIS_SAFE_RESPONSE
-                ),
+                response_text=_blocked_response_text(safety_result),
                 enforcement=enforcement_result,
                 safety=safety_result,
                 trace_id=trace_id

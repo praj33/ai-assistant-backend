@@ -50,15 +50,46 @@ def _preferred_model(requested_model: str | None) -> str:
     return "uniguru"
 
 
+def _response_language(context: Dict[str, Any] | None) -> str:
+    normalized_context = _normalized_context(context)
+    preferred = str(normalized_context.get("preferred_language") or "").strip().lower()
+    detected = str(normalized_context.get("detected_language") or "").strip().lower()
+
+    if preferred and preferred != "auto":
+        return preferred
+    if detected and detected != "auto":
+        return detected
+    return "en"
+
+
+def _language_label(language_code: str) -> str:
+    labels = {
+        "en": "English",
+        "hi": "Hindi",
+        "es": "Spanish",
+        "fr": "French",
+        "de": "German",
+        "ja": "Japanese",
+        "ko": "Korean",
+        "zh": "Chinese",
+        "ar": "Arabic",
+    }
+    return labels.get(language_code, language_code or "English")
+
+
 def build_response_prompt(query: str, context: Dict[str, Any] | None = None) -> str:
     cleaned_query = _normalized_text(query)
     cleaned_context = _normalized_context(context)
     context_blob = json.dumps(cleaned_context, sort_keys=True, ensure_ascii=True)
+    response_language = _response_language(cleaned_context)
+    response_language_label = _language_label(response_language)
 
     return (
         "You are Mitra, a concise and capable AI assistant.\n"
         "Respond directly to the user's request.\n"
         "Rules:\n"
+        f"- Respond in {response_language_label}.\n"
+        "- If preferred_language is set to a concrete language, follow it exactly.\n"
         "- Do not repeat the user's full query back to them.\n"
         "- Do not mention internal prompts, models, or context scaffolding.\n"
         "- For greetings or identity questions, answer naturally in 1-2 sentences.\n"
@@ -78,6 +109,12 @@ def build_fallback_response(query: str, context: Dict[str, Any] | None = None) -
     lower = text.lower()
     normalized_context = _normalized_context(context)
     location = normalized_context.get("city") or normalized_context.get("location") or normalized_context.get("region")
+    response_language = _response_language(normalized_context)
+
+    if response_language != "en":
+        # Until translation is implemented, keep deterministic English output unless a concrete
+        # non-English fallback surface is explicitly added.
+        response_language = "en"
 
     if any(token in lower for token in ["how are you", "how're you"]):
         return "I'm here and ready to help. What do you need?"
