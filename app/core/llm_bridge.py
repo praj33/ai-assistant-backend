@@ -1,6 +1,7 @@
 import os
 import asyncio
 import hashlib
+import logging
 
 try:
     from openai import AsyncOpenAI
@@ -19,11 +20,14 @@ try:
 except ImportError:
     MistralClient = None
 
+logger = logging.getLogger(__name__)
+
 
 class LLMBridge:
     def __init__(self):
         openai_key = os.getenv("OPENAI_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")
+        self.groq_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip() or "llama-3.1-8b-instant"
 
         self.openai_client = AsyncOpenAI(api_key=openai_key) if AsyncOpenAI and openai_key else None
         self.groq_client = AsyncGroq(api_key=groq_key) if AsyncGroq and groq_key else None
@@ -66,7 +70,7 @@ class LLMBridge:
                         raise ImportError("groq package is not installed")
                     raise ValueError("GROQ_API_KEY is not configured")
                 response = await self.groq_client.chat.completions.create(
-                    model="mixtral-8x7b-instruct",
+                    model=self.groq_model,
                     messages=[{"role": "user", "content": prompt}]
                 )
                 output = response.choices[0].message.content
@@ -98,6 +102,7 @@ class LLMBridge:
                 raise ValueError(f"Unsupported model: {model}")
 
         except Exception as e:
+            logger.warning("LLM fallback triggered for model %s: %s", model, e)
             # Fallback to mock response on any error
             output = f"[{model.capitalize()} Mock] Response to: Context: {prompt[:50]}..."
 
