@@ -4,6 +4,7 @@ from app.external.enforcement.replay_validation import run_replay_validation
 from app.services.bucket_service import BucketService
 from app.services.enforcement_service import EnforcementService
 from app.services.execution_service import ExecutionService
+from app.services.telegram_contact_service import TelegramContactService
 
 
 def _safety_payload(trace_id: str, decision: str = "allow", safe_output: str | None = None) -> dict:
@@ -155,6 +156,91 @@ def test_execution_service_blocks_allow_when_bucket_artifact_is_tampered(monkeyp
 
     assert result["status"] == "blocked"
     assert "bucket artifact" in result["reason"].lower()
+    assert called["value"] is False
+
+
+def test_execution_service_resolves_known_telegram_username(monkeypatch):
+    trace_id = "trace_known_telegram_username"
+    safety = _safety_payload(trace_id)
+    bucket = BucketService()
+    BucketService.clear_memory_logs()
+    bucket.log_event(trace_id, "safety_validation", copy.deepcopy(safety))
+
+    TelegramContactService._memory_store["knownuser"] = 1657991703
+
+    service = ExecutionService()
+
+    monkeypatch.setattr(
+        service.telegram,
+        "resolve_public_chat_id",
+        lambda recipient, trace_id: None,
+    )
+
+    def _send_message(**kwargs):
+        return {
+            "status": "success",
+            "to": kwargs["to_chat_id"],
+            "message": kwargs["message"],
+            "trace_id": kwargs["trace_id"],
+        }
+
+    monkeypatch.setattr(service.telegram, "send_message", _send_message)
+
+    result = service.execute_action(
+        action_type="telegram",
+        action_data={"to": "@knownuser", "message": "hello"},
+        trace_id=trace_id,
+        enforcement_decision={
+            "decision": "ALLOW",
+            "scope": "both",
+            "trace_id": "enf_known_telegram_username",
+            "reason_code": "CONTENT_AND_ACTION_ALLOWED",
+            "request_trace_id": trace_id,
+        },
+    )
+
+    assert result["status"] == "success"
+    assert result["to"] == "1657991703"
+
+
+def test_execution_service_returns_clear_error_for_unknown_telegram_username(monkeypatch):
+    trace_id = "trace_unknown_telegram_username"
+    safety = _safety_payload(trace_id)
+    bucket = BucketService()
+    BucketService.clear_memory_logs()
+    bucket.log_event(trace_id, "safety_validation", copy.deepcopy(safety))
+
+    service = ExecutionService()
+    called = {"value": False}
+
+    monkeypatch.setattr(
+        service.telegram,
+        "resolve_public_chat_id",
+        lambda recipient, trace_id: None,
+    )
+
+    def _unexpected_send(**kwargs):
+        called["value"] = True
+        return {"status": "unexpected"}
+
+    monkeypatch.setattr(service.telegram, "send_message", _unexpected_send)
+
+    result = service.execute_action(
+        action_type="telegram",
+        action_data={"to": "@unknownuser", "message": "hello"},
+        trace_id=trace_id,
+        enforcement_decision={
+            "decision": "ALLOW",
+            "scope": "both",
+            "trace_id": "enf_unknown_telegram_username",
+            "reason_code": "CONTENT_AND_ACTION_ALLOWED",
+            "request_trace_id": trace_id,
+        },
+    )
+
+    assert result["status"] == "error"
+    assert "start the bot first" in result["error"].lower()
+    assert "chat id" in result["error"].lower()
     assert called["value"] is False
 
 

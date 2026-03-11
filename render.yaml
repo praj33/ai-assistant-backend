@@ -44,6 +44,8 @@ services:
         sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
+      - key: TELEGRAM_WEBHOOK_URL
+        sync: false
       - key: GOOGLE_CALENDAR_API_KEY
         sync: false
       - key: GOOGLE_CALENDAR_ACCESS_TOKEN

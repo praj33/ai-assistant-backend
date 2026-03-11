@@ -7,7 +7,7 @@ Supports simulation mode when TELEGRAM_BOT_TOKEN is not configured.
 
 import os
 import requests
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
 
@@ -20,6 +20,49 @@ class TelegramExecutor:
     def __init__(self):
         self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}" if self.bot_token else None
+
+    @staticmethod
+    def _normalized_username(recipient: str) -> str:
+        recipient = str(recipient or "").strip()
+        if not recipient:
+            return ""
+        return recipient if recipient.startswith("@") else f"@{recipient.lstrip('@')}"
+
+    def resolve_public_chat_id(self, recipient: str, trace_id: str) -> Optional[str]:
+        """
+        Resolve a public Telegram username to a numeric chat id when the bot can access it.
+        Private users still need to start the bot first so their chat_id can be stored.
+        """
+        username = self._normalized_username(recipient)
+        if not username or not self.base_url:
+            return None
+
+        try:
+            url = f"{self.base_url}/getChat"
+            response = requests.post(url, json={"chat_id": username}, timeout=30)
+            if response.status_code != 200:
+                logger.info(
+                    "[%s] Telegram public chat lookup did not resolve %s: %s",
+                    trace_id,
+                    username,
+                    response.text,
+                )
+                return None
+
+            body = response.json()
+            chat = body.get("result", {}) if isinstance(body, dict) else {}
+            chat_id = chat.get("id")
+            if chat_id is None:
+                return None
+            return str(chat_id)
+        except Exception as exc:
+            logger.warning(
+                "[%s] Telegram public chat lookup failed for %s: %s",
+                trace_id,
+                username,
+                exc,
+            )
+            return None
 
     def send_message(self, to_chat_id: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
         """Send a message via Telegram Bot API."""

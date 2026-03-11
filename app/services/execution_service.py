@@ -276,6 +276,30 @@ class ExecutionService:
                     resolved = TelegramContactService().resolve_chat_id(recipient_str)
                     if resolved is not None:
                         recipient_str = str(resolved)
+                    else:
+                        resolved_public = self.telegram.resolve_public_chat_id(recipient_str, trace_id=trace_id)
+                        if resolved_public is not None:
+                            recipient_str = str(resolved_public)
+                        else:
+                            return {
+                                "status": "error",
+                                "error": (
+                                    "Telegram recipient is unknown. Ask the recipient to start the bot first "
+                                    "or provide a numeric chat ID."
+                                ),
+                                "recipient": recipient_str,
+                                "trace_id": trace_id,
+                                "timestamp": datetime.utcnow().isoformat(),
+                                "platform": "telegram",
+                            }
+                if not recipient_str:
+                    return {
+                        "status": "error",
+                        "error": "Telegram recipient is missing. Provide a username or numeric chat ID.",
+                        "trace_id": trace_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "platform": "telegram",
+                    }
                 return self.telegram.send_message(
                     to_chat_id=recipient_str,
                     message=action_data.get("message", ""),

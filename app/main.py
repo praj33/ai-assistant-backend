@@ -41,6 +41,7 @@ from app.core.database import create_tables
 from app.core.security import rate_limit, audit_log
 from app.api.assistant import router as assistant_router
 from app.api.webhooks import router as webhook_router
+from app.executors.telegram_executor import TelegramExecutor
 from app.services.reminder_scheduler import ReminderScheduler, SchedulerConfig
 
 # -------------------------------------------------
@@ -48,6 +49,40 @@ from app.services.reminder_scheduler import ReminderScheduler, SchedulerConfig
 # -------------------------------------------------
 setup_logging()
 logger = get_logger(__name__)
+
+
+def _telegram_webhook_url() -> str | None:
+    explicit = (os.getenv("TELEGRAM_WEBHOOK_URL") or "").strip()
+    if explicit:
+        return explicit
+
+    public_base = (
+        os.getenv("RENDER_EXTERNAL_URL")
+        or os.getenv("BASE_URL")
+        or os.getenv("PUBLIC_BASE_URL")
+        or ""
+    ).strip()
+    if not public_base or "localhost" in public_base or "127.0.0.1" in public_base:
+        return None
+    return f"{public_base.rstrip('/')}/webhook/telegram"
+
+
+def _register_telegram_webhook() -> None:
+    webhook_url = _telegram_webhook_url()
+    if not webhook_url:
+        logger.info("Telegram webhook registration skipped: no public webhook URL configured")
+        return
+
+    executor = TelegramExecutor()
+    if not executor.bot_token:
+        logger.info("Telegram webhook registration skipped: TELEGRAM_BOT_TOKEN not configured")
+        return
+
+    result = executor.set_webhook(webhook_url)
+    if result.get("status") == "success":
+        logger.info("Telegram webhook registered: %s", webhook_url)
+    else:
+        logger.warning("Telegram webhook registration failed: %s", result)
 
 # -------------------------------------------------
 # App lifespan
@@ -79,6 +114,11 @@ async def lifespan(app: FastAPI):
             logger.info("Reminder scheduler started")
         except Exception as e:
             logger.error(f"Failed to start reminder scheduler: {e}")
+
+    try:
+        _register_telegram_webhook()
+    except Exception as e:
+        logger.warning(f"Telegram webhook setup failed: {e}")
 
     yield
 
