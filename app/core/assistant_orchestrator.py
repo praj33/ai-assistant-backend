@@ -11,14 +11,9 @@ from app.core.respond_service import generate_generic_response
 from app.core.logging import get_logger
 from app.core.database import get_db
 
-# Import integrated services
-from app.services.safety_service import SafetyService
-from app.services.intelligence_service import IntelligenceService
-from app.services.enforcement_service import EnforcementService
-from app.services.bucket_service import BucketService
-from app.services.execution_service import ExecutionService
+from app.mitra_system_registry import mitra_registry
+from app.karma_adapter import fetch_user_karma, karma_bias_from_points
 from app.services.multilingual_service import MultilingualService
-from app.services.audio_service import AudioService
 from app.external.enforcement.deterministic_trace import (
     generate_trace_id as generate_deterministic_trace_id,
 )
@@ -34,14 +29,14 @@ CRISIS_SAFE_RESPONSE = (
     "If you're elsewhere, contact your local emergency number or nearest crisis line."
 )
 
-# Initialize services
-safety_service = SafetyService()
-intelligence_service = IntelligenceService()
-enforcement_service = EnforcementService()
-bucket_service = BucketService()
-execution_service = ExecutionService()
+# Initialize services via the central registry (single shared instances)
+safety_service = mitra_registry.safety_service
+intelligence_service = mitra_registry.intelligence_service
+enforcement_service = mitra_registry.enforcement_service
+bucket_service = mitra_registry.bucket_service
+execution_service = mitra_registry.execution_service
 multilingual_service = MultilingualService()
-audio_service = AudioService()
+audio_service = mitra_registry.audio_service
 
 def _to_namespace(value):
     if isinstance(value, dict):
@@ -511,12 +506,24 @@ async def handle_assistant_request(request):
         # STEP 2: INTELLIGENCE (Sankalp)
         # -------------------------------
         logger.info(f"[{trace_id}] Calling Intelligence Service")
+        principal = getattr(request.context, "authenticated_user_context", None)
+        if isinstance(principal, dict):
+            principal_id = principal.get("principal")
+        else:
+            principal_id = None
+
+        karma_data = fetch_user_karma(principal_id)
+
         intelligence_context = {
             "user_input": text,
             "platform": request.context.platform if hasattr(request.context, 'platform') else "web",
-            "session_id": request.context.session_id if hasattr(request.context, 'session_id') else None
+            "session_id": request.context.session_id if hasattr(request.context, 'session_id') else None,
+            "karma_data": karma_data,
         }
         intelligence_result = call_intelligence_service(intelligence_context, trace_id)
+
+        # Ensure a deterministic karma_score is always present for enforcement.
+        intelligence_result.setdefault("karma_score", karma_data.get("karma_points", 50))
         
         # -------------------------------
         # STEP 3: ENFORCEMENT (Raj)

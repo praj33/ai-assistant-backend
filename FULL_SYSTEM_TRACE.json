@@ -1,0 +1,82 @@
+{
+  "description": "Live Mitra full system trace generated via /webhook/telegram → inbound gateway → assistant_orchestrator → Safety → Intelligence → Enforcement → Orchestration.",
+  "trace_id": "trace_252376fe7d192ac0",
+  "version": "3.0.0",
+  "stages": [
+    {
+      "stage": "request_received",
+      "data": {
+        "input_text": "hello mitra full trace",
+        "detected_language": "en",
+        "preferred_language": "en",
+        "platform": "telegram",
+        "device": "mobile"
+      }
+    },
+    {
+      "stage": "safety_validation",
+      "data": {
+        "decision": "allow",
+        "risk_category": "clean",
+        "reason_code": "clean_content",
+        "original_output": "hello mitra full trace",
+        "safe_output": "hello mitra full trace"
+      }
+    },
+    {
+      "stage": "intelligence_processing",
+      "data": {
+        "behavioral_state": "restricted",
+        "expression_profile": "low",
+        "safe_mode": "on",
+        "speech_mode": "text_only"
+      }
+    },
+    {
+      "stage": "enforcement_telemetry",
+      "data": {
+        "decision": "ALLOW",
+        "scope": "both",
+        "reason_code": "CONTENT_AND_ACTION_ALLOWED",
+        "intent": "general",
+        "risk_flags": [],
+        "karma_score": 50
+      }
+    },
+    {
+      "stage": "enforcement_decision",
+      "data": {
+        "decision": "ALLOW",
+        "scope": "both",
+        "reason_code": "CONTENT_AND_ACTION_ALLOWED"
+      }
+    },
+    {
+      "stage": "orchestration_processing",
+      "data": {
+        "processed_text": "hello mitra full trace",
+        "intent": {
+          "intent": "general",
+          "sentiment": "neutral"
+        }
+      }
+    },
+    {
+      "stage": "response_generated",
+      "data": {
+        "status": "success",
+        "result_type": "passive",
+        "response": "Hello. How can I help?"
+      }
+    },
+    {
+      "stage": "inbound_event",
+      "data": {
+        "platform": "telegram",
+        "user_id": "222",
+        "message": "hello mitra full trace"
+      }
+    }
+  ]
+}
+

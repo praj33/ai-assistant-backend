@@ -43,6 +43,7 @@ from app.api.assistant import router as assistant_router
 from app.api.webhooks import router as webhook_router
 from app.executors.telegram_executor import TelegramExecutor
 from app.services.reminder_scheduler import ReminderScheduler, SchedulerConfig
+from app.mitra_system_health import get_system_health_snapshot
 
 # -------------------------------------------------
 # Logging
@@ -239,3 +240,12 @@ async def health_check():
         "version": "3.0.0",
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
+
+
+@app.get("/health/system")
+async def system_health():
+    """
+    Deep system health endpoint.
+    Reports module status, bucket status, and runtime version for BHIV Core.
+    """
+    return get_system_health_snapshot()
