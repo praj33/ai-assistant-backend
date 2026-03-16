@@ -1,11 +1,11 @@
 """
 Reminder Scheduler Service — Day 2B Integration
 
-Runs scheduled reminders automatically through the Universal Execution Gateway:
-Safety -> Enforcement -> ExecutionService (adapter-token enforced)
+Runs scheduled reminders through the unified inbound gateway:
+Safety -> Intelligence -> Enforcement -> Orchestrator -> ExecutionService
 
-This is gateway-only: it does not control devices directly; it records an audit trace
-and marks reminders as delivered.
+This remains gateway-only: it does not control devices directly; it records an audit trace
+and marks reminders as delivered through the orchestrated execution path.
 """
 
 from __future__ import annotations
@@ -15,12 +15,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from app.core.assistant_orchestrator import generate_trace_id
 from app.executors.reminder_executor import ReminderExecutor
 from app.services.bucket_service import BucketService
-from app.services.enforcement_service import EnforcementService
-from app.services.execution_service import ExecutionService
-from app.services.safety_service import SafetyService
+from app.inbound.reminder_event_handler import handle_reminder_event
 
 
 @dataclass
@@ -33,9 +30,6 @@ class ReminderScheduler:
     def __init__(self, config: Optional[SchedulerConfig] = None):
         self.config = config or SchedulerConfig()
         self.bucket = BucketService()
-        self.safety = SafetyService()
-        self.enforcement = EnforcementService()
-        self.gateway = ExecutionService()
         self.reminders = ReminderExecutor()
 
         self._stop = asyncio.Event()
@@ -57,8 +51,7 @@ class ReminderScheduler:
         """
         Execute one scheduler tick:
         - pop due reminders
-        - validate via safety + enforcement
-        - deliver via gateway
+        - route through inbound gateway
         """
         due = self.reminders.pop_due_reminders(now=datetime.utcnow())
         due = due[: self.config.max_batch]
@@ -67,43 +60,18 @@ class ReminderScheduler:
         for reminder in due:
             reminder_id = reminder.get("reminder_id", "")
             message = reminder.get("message", "")
+            self.bucket.log_event(reminder_id or "reminder_unknown", "reminder_due", {"reminder": reminder})
 
-            trace_id = generate_trace_id(
-                {
-                    "source": "reminder_scheduler",
-                    "reminder_id": reminder_id,
-                    "message": message,
-                    "user_id": reminder.get("user_id", ""),
-                    "remind_at": reminder.get("remind_at"),
-                }
-            )
-            self.bucket.log_event(trace_id, "reminder_due", {"reminder": reminder})
-
-            safety_result = self.safety.validate_content(content=message, trace_id=trace_id)
-            self.bucket.log_event(trace_id, "safety_validation", safety_result)
-
-            enforcement_payload = {
-                "safety": safety_result,
-                "intelligence": {"source": "reminder_scheduler"},
-                "user_input": message,
-                "intent": "reminder_delivery",
-                "trace_id": trace_id,
-            }
-            enforcement_result = self.enforcement.enforce_policy(payload=enforcement_payload, trace_id=trace_id)
-            self.bucket.log_event(trace_id, "enforcement_decision", enforcement_result)
-
-            delivery = self.gateway.execute_action(
-                action_type="reminder",
-                action_data={"action": "deliver_reminder", "reminder_id": reminder_id},
-                trace_id=trace_id,
-                enforcement_decision=enforcement_result,
-            )
-            self.bucket.log_event(trace_id, "reminder_delivery", delivery)
+            delivery = await handle_reminder_event(reminder)
             deliveries.append(
                 {
-                    "trace_id": trace_id,
+                    "trace_id": delivery.get("trace_id"),
                     "reminder_id": reminder_id,
-                    "decision": enforcement_result.get("decision", "BLOCK"),
+                    "decision": (
+                        delivery.get("result", {})
+                        .get("enforcement", {})
+                        .get("decision", "BLOCK")
+                    ),
                     "delivery": delivery,
                 }
             )

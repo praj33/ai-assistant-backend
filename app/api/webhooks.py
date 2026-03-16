@@ -1,167 +1,30 @@
-from fastapi import APIRouter, Request, BackgroundTasks, HTTPException
-from typing import Dict, Any, Optional
+from fastapi import APIRouter, Request, HTTPException
+from typing import Dict, Any
 import os
 import json
 from datetime import datetime
 
-from app.core.assistant_orchestrator import handle_assistant_request
+from app.inbound.whatsapp_inbound_handler import handle_whatsapp_webhook
+from app.inbound.email_inbound_handler import handle_email_webhook
+from app.inbound.telegram_inbound_handler import handle_telegram_webhook
+from app.inbound.inbound_gateway import process_message
 from app.services.telegram_contact_service import TelegramContactService
 
 router = APIRouter()
 
 
-def _build_internal_request(
-    *,
-    message: str,
-    platform: str,
-    device: str,
-    session_id: str,
-    voice_input: bool,
-    preferred_language: str = "auto",
-    principal: Optional[str] = None,
-) -> Dict[str, Any]:
-    authenticated_user_context = {
-        "auth_method": f"{platform}_webhook",
-        "principal": principal or session_id or f"{platform}_anonymous",
-        "platform": platform,
-        "device": device,
-    }
-    if session_id:
-        authenticated_user_context["session_id"] = str(session_id)
-
-    return {
-        "version": "3.0.0",
-        "input": {"message": message},
-        "context": {
-            "platform": platform,
-            "device": device,
-            "session_id": str(session_id or ""),
-            "voice_input": voice_input,
-            "preferred_language": preferred_language,
-            "detected_language": None,
-            "authenticated_user_context": authenticated_user_context,
-            "user_context": authenticated_user_context,
-        },
-    }
-
-
 @router.post("/webhooks/whatsapp")
 @router.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
-    """
-    Handle incoming WhatsApp messages
-    Ensures inbound messages go through the same safety → intelligence → enforcement → orchestration flow
-    """
-    try:
-        payload = await request.json()
-        
-        # Extract message from WhatsApp Business API payload
-        # Different providers may have different payload structures
-        entries = payload.get("entry", [])
-        if not entries:
-            return {"status": "ignored", "reason": "no_entries"}
-        
-        messaging_events = entries[0].get("messaging", [])
-        if not messaging_events:
-            # May be other event types like message status updates
-            return {"status": "ignored", "reason": "no_messaging_events"}
-        
-        messaging_event = messaging_events[0]
-        
-        # Check if it's a message event
-        if messaging_event.get("message"):
-            message_data = messaging_event["message"]
-            
-            # Only process text messages (ignore images, videos, etc. for now)
-            if message_data.get("type") == "text":
-                message_text = message_data["text"]["body"]
-                sender_id = messaging_event["sender"]["id"]
-                
-                # Create internal request object that follows the same flow as regular API requests
-                internal_request = _build_internal_request(
-                    message=message_text,
-                    platform="whatsapp",
-                    device="mobile",
-                    session_id=str(sender_id or ""),
-                    voice_input=False,
-                    principal=str(sender_id or ""),
-                )
-                
-                # Process through main orchestrator (same safety → intelligence → enforcement → orchestration flow)
-                result = await handle_assistant_request(internal_request)
-                
-                # Log the processed message
-                print(f"WhatsApp message from {sender_id} processed. Trace ID: {result.get('trace_id')}")
-                
-                return {
-                    "status": "processed", 
-                    "trace_id": result.get("trace_id"),
-                    "processed_at": datetime.utcnow().isoformat()
-                }
-            else:
-                # For non-text messages, we could implement media processing
-                return {"status": "ignored", "reason": f"unsupported_message_type: {message_data.get('type')}"}
-        else:
-            # Could be other events like delivery receipts, read receipts, etc.
-            return {"status": "ignored", "reason": "non_message_event"}
-    
-    except Exception as e:
-        print(f"Error processing WhatsApp webhook: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(e)}")
+    """Inbound WhatsApp webhook → unified inbound gateway."""
+    return await handle_whatsapp_webhook(request)
 
 
 @router.post("/webhooks/email")
 @router.post("/webhook/email")
 async def email_webhook(request: Request):
-    """
-    Handle incoming email parsing
-    Ensures inbound emails go through the same safety → intelligence → enforcement → orchestration flow
-    """
-    try:
-        # For email, we might receive raw MIME data or parsed email data depending on the email provider
-        content_type = request.headers.get("content-type", "")
-        
-        if "application/json" in content_type:
-            payload = await request.json()
-        else:
-            # For raw email data, we'd need to parse it differently
-            raw_body = await request.body()
-            # For now, assume it's JSON with content field
-            payload = {"content": raw_body.decode('utf-8')}
-        
-        # Extract email content
-        email_content = payload.get("content", "") or payload.get("text", "") or payload.get("body", "")
-        sender = payload.get("from", payload.get("sender", ""))
-        subject = payload.get("subject", "No Subject")
-        
-        if not email_content:
-            return {"status": "ignored", "reason": "empty_content"}
-        
-        # Create internal request object
-        internal_request = _build_internal_request(
-            message=f"Subject: {subject}\n\n{email_content}",
-            platform="email",
-            device="desktop",
-            session_id=str(sender or ""),
-            voice_input=False,
-            principal=str(sender or ""),
-        )
-        
-        # Process through main orchestrator (same safety → intelligence → enforcement → orchestration flow)
-        result = await handle_assistant_request(internal_request)
-        
-        # Log the processed email
-        print(f"Email from {sender} processed. Trace ID: {result.get('trace_id')}")
-        
-        return {
-            "status": "processed", 
-            "trace_id": result.get("trace_id"),
-            "processed_at": datetime.utcnow().isoformat()
-        }
-    
-    except Exception as e:
-        print(f"Error processing email webhook: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(e)}")
+    """Inbound email webhook → unified inbound gateway."""
+    return await handle_email_webhook(request)
 
 
 @router.post("/webhooks/call")
@@ -182,18 +45,16 @@ async def telephony_webhook(request: Request):
         if not transcription:
             return {"status": "ignored", "reason": "no_transcription"}
         
-        # Create internal request object
-        internal_request = _build_internal_request(
-            message=transcription,
+        result = await process_message(
             platform="telephony",
+            user_id=str(caller_id or ""),
+            message=transcription,
+            timestamp=datetime.utcnow().isoformat(),
+            metadata={"provider": "telephony", "payload": payload},
             device="phone",
-            session_id=str(caller_id or ""),
+            preferred_language="auto",
             voice_input=True,
-            principal=str(caller_id or ""),
         )
-        
-        # Process through main orchestrator (same safety → intelligence → enforcement → orchestration flow)
-        result = await handle_assistant_request(internal_request)
         
         # Log the processed call
         print(f"Telephony call from {caller_id} processed. Trace ID: {result.get('trace_id')}")
@@ -212,49 +73,8 @@ async def telephony_webhook(request: Request):
 @router.post("/webhooks/telegram")
 @router.post("/webhook/telegram")
 async def telegram_webhook(request: Request):
-    """
-    Handle incoming Telegram Bot API updates.
-    Routes inbound messages through Safety → Intelligence → Enforcement → Orchestration.
-    """
-    try:
-        payload = await request.json()
-
-        # Telegram sends updates with a "message" field
-        message = payload.get("message", {})
-        if not message or not message.get("text"):
-            return {"status": "ignored", "reason": "no_text_message"}
-
-        chat = message.get("chat", {})
-        sender = message.get("from", {})
-        text = message.get("text", "")
-
-        # Persist contact details (works for username and no-username users)
-        contact_service = TelegramContactService()
-        contact_service.save_from_telegram_message(chat, sender)
-        chat_id = chat.get("id")
-
-        internal_request = _build_internal_request(
-            message=text,
-            platform="telegram",
-            device="mobile",
-            session_id=str(chat_id or ""),
-            voice_input=False,
-            preferred_language=sender.get("language_code", "auto"),
-            principal=sender.get("username") or str(sender.get("id") or chat_id or ""),
-        )
-
-        result = await handle_assistant_request(internal_request)
-        print(f"Telegram message from {sender.get('username', sender.get('id'))} processed. Trace: {result.get('trace_id')}")
-
-        return {
-            "status": "processed",
-            "trace_id": result.get("trace_id"),
-            "processed_at": datetime.utcnow().isoformat()
-        }
-
-    except Exception as e:
-        print(f"Error processing Telegram webhook: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(e)}")
+    """Inbound Telegram webhook → unified inbound gateway."""
+    return await handle_telegram_webhook(request)
 
 
 @router.get("/webhook/telegram")
@@ -300,16 +120,16 @@ async def instagram_webhook(request: Request):
                     sender_id = event.get("sender", {}).get("id", "")
                     text = event["message"]["text"]
 
-                    internal_request = _build_internal_request(
-                        message=text,
+                    result = await process_message(
                         platform="instagram",
+                        user_id=str(sender_id or ""),
+                        message=text,
+                        timestamp=datetime.utcnow().isoformat(),
+                        metadata={"provider": "instagram", "payload": payload},
                         device="mobile",
-                        session_id=str(sender_id or ""),
+                        preferred_language="auto",
                         voice_input=False,
-                        principal=str(sender_id or ""),
                     )
-
-                    result = await handle_assistant_request(internal_request)
                     last_trace_id = result.get("trace_id")
                     print(f"Instagram message from {sender_id} processed. Trace: {result.get('trace_id')}")
 

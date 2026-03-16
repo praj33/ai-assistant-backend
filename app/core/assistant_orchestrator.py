@@ -291,6 +291,13 @@ def extract_action_parameters(text: str, action_type: str) -> Dict[str, Any]:
         }
     
     elif action_type == "reminder":
+        deliver_match = re.search(r'(?:deliver\s+reminder|reminder\s+deliver|deliver)\s+(rem_[\w-]+)', text, re.IGNORECASE)
+        if deliver_match:
+            return {
+                "action": "deliver_reminder",
+                "reminder_id": deliver_match.group(1).strip(),
+            }
+
         message_match = re.search(r'(?:remind.*?to|reminder.*?to|remind.*?about)\s+(.+?)(?:\s+(?:at|in|tomorrow)|$)', text, re.IGNORECASE)
         time_match = re.search(r'(?:at|in)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)?)', text, re.IGNORECASE)
         return {
