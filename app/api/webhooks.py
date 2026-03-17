@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Request, HTTPException
 from typing import Dict, Any
 import os
-import json
 from datetime import datetime
 
 from app.inbound.whatsapp_inbound_handler import handle_whatsapp_webhook
@@ -16,14 +15,28 @@ router = APIRouter()
 @router.post("/webhooks/whatsapp")
 @router.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
-    """Inbound WhatsApp webhook → unified inbound gateway."""
+    """Inbound WhatsApp webhook -> unified inbound gateway."""
     return await handle_whatsapp_webhook(request)
+
+
+@router.get("/webhooks/whatsapp")
+@router.get("/webhook/whatsapp")
+async def whatsapp_webhook_verify(request: Request):
+    """WhatsApp/Meta webhook verification challenge."""
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+
+    verify_token = (os.getenv("WHATSAPP_VERIFY_TOKEN") or os.getenv("META_VERIFY_TOKEN") or "").strip()
+    if mode == "subscribe" and token and verify_token and token == verify_token:
+        return int(challenge) if challenge else "ok"
+    raise HTTPException(status_code=403, detail="Verification failed")
 
 
 @router.post("/webhooks/email")
 @router.post("/webhook/email")
 async def email_webhook(request: Request):
-    """Inbound email webhook → unified inbound gateway."""
+    """Inbound email webhook -> unified inbound gateway."""
     return await handle_email_webhook(request)
 
 
@@ -32,19 +45,19 @@ async def email_webhook(request: Request):
 @router.post("/webhook/telephony")
 async def telephony_webhook(request: Request):
     """
-    Handle telephony inbound (call received → transcription → intent)
+    Handle telephony inbound (call received -> transcription -> intent)
     This is a stub for telephony integration
     """
     try:
         payload = await request.json()
-        
+
         # Extract call details and transcription
         caller_id = payload.get("caller_id", "")
         transcription = payload.get("transcription", "")
-        
+
         if not transcription:
             return {"status": "ignored", "reason": "no_transcription"}
-        
+
         result = await process_message(
             platform="telephony",
             user_id=str(caller_id or ""),
@@ -55,16 +68,16 @@ async def telephony_webhook(request: Request):
             preferred_language="auto",
             voice_input=True,
         )
-        
+
         # Log the processed call
         print(f"Telephony call from {caller_id} processed. Trace ID: {result.get('trace_id')}")
-        
+
         return {
-            "status": "processed", 
+            "status": "processed",
             "trace_id": result.get("trace_id"),
-            "processed_at": datetime.utcnow().isoformat()
+            "processed_at": datetime.utcnow().isoformat(),
         }
-    
+
     except Exception as e:
         print(f"Error processing telephony webhook: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(e)}")
@@ -73,13 +86,13 @@ async def telephony_webhook(request: Request):
 @router.post("/webhooks/telegram")
 @router.post("/webhook/telegram")
 async def telegram_webhook(request: Request):
-    """Inbound Telegram webhook → unified inbound gateway."""
+    """Inbound Telegram webhook -> unified inbound gateway."""
     return await handle_telegram_webhook(request)
 
 
 @router.get("/webhook/telegram")
 async def telegram_webhook_verify(request: Request):
-    """Telegram webhook verification — just returns OK."""
+    """Telegram webhook verification - just returns OK."""
     return {"status": "ok", "service": "telegram_webhook"}
 
 
@@ -98,12 +111,13 @@ async def list_telegram_contacts():
         "timestamp": datetime.utcnow().isoformat(),
     }
 
+
 @router.post("/webhooks/instagram")
 @router.post("/webhook/instagram")
 async def instagram_webhook(request: Request):
     """
     Handle incoming Instagram Messenger API webhooks.
-    Routes inbound messages through Safety → Intelligence → Enforcement → Orchestration.
+    Routes inbound messages through Safety -> Intelligence -> Enforcement -> Orchestration.
     """
     try:
         payload = await request.json()
@@ -136,7 +150,7 @@ async def instagram_webhook(request: Request):
         return {
             "status": "processed",
             "trace_id": last_trace_id,
-            "processed_at": datetime.utcnow().isoformat()
+            "processed_at": datetime.utcnow().isoformat(),
         }
 
     except Exception as e:
@@ -164,5 +178,5 @@ async def webhook_health():
         "status": "healthy",
         "service": "webhook_handler",
         "platforms": ["whatsapp", "email", "telegram", "instagram", "telephony"],
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }

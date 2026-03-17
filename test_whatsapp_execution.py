@@ -12,20 +12,41 @@ print("=" * 60)
 print("AI Assistant - WhatsApp Execution Test")
 print("=" * 60)
 
-# Check credentials
-account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+# Detect provider
+provider = (os.getenv("WHATSAPP_PROVIDER") or "").strip().lower()
+cloud_token = os.getenv("WHATSAPP_CLOUD_ACCESS_TOKEN")
+cloud_phone_id = os.getenv("WHATSAPP_CLOUD_PHONE_NUMBER_ID")
 
-if not account_sid or not auth_token:
-    print("\n[X] Twilio credentials not configured!")
-    print("\nPlease update your .env file with:")
-    print("  TWILIO_ACCOUNT_SID=ACxxxxxxxx")
-    print("  TWILIO_AUTH_TOKEN=your_token")
-    print("\nSee ENABLE_WHATSAPP_EXECUTION.md for setup.")
-    sys.exit(1)
+if not provider:
+    provider = "cloud" if cloud_token and cloud_phone_id else "twilio"
 
-print(f"\n[OK] Twilio credentials found")
-print(f"   Account SID: {account_sid[:10]}...")
+if provider == "cloud":
+    if not cloud_token or not cloud_phone_id:
+        print("\n[X] WhatsApp Cloud credentials not configured!")
+        print("\nPlease update your .env file with:")
+        print("  WHATSAPP_PROVIDER=cloud")
+        print("  WHATSAPP_CLOUD_ACCESS_TOKEN=your_access_token")
+        print("  WHATSAPP_CLOUD_PHONE_NUMBER_ID=your_phone_number_id")
+        print("\nSee WHATSAPP_CLOUD_SETUP.md for setup.")
+        sys.exit(1)
+
+    print("\n[OK] WhatsApp Cloud credentials found")
+    print(f"   Phone Number ID: {cloud_phone_id[:10]}...")
+else:
+    # Check Twilio credentials
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+    if not account_sid or not auth_token:
+        print("\n[X] Twilio credentials not configured!")
+        print("\nPlease update your .env file with:")
+        print("  TWILIO_ACCOUNT_SID=ACxxxxxxxx")
+        print("  TWILIO_AUTH_TOKEN=your_token")
+        print("\nSee ENABLE_WHATSAPP_EXECUTION.md for setup.")
+        sys.exit(1)
+
+    print(f"\n[OK] Twilio credentials found")
+    print(f"   Account SID: {account_sid[:10]}...")
 
 # Get test number
 test_number = input("\nEnter WhatsApp number (with country code, e.g., +919876543210): ").strip()
@@ -35,8 +56,9 @@ if not test_number:
     sys.exit(1)
 
 print(f"\n[WHATSAPP] Sending test message to: {test_number}")
-print("\nIMPORTANT: Recipient must join Twilio sandbox first!")
-print("Send 'join <code>' to +1 415 523 8886 from WhatsApp")
+if provider == "twilio":
+    print("\nIMPORTANT: Recipient must join Twilio sandbox first!")
+    print("Send 'join <code>' to +1 415 523 8886 from WhatsApp")
 
 # Initialize gateway (must go through Universal Execution Gateway)
 gateway = ExecutionService()
@@ -59,7 +81,10 @@ print("=" * 60)
 if result.get("status") == "success":
     print("\n[SUCCESS] WHATSAPP MESSAGE SENT!")
     print(f"\n   To: {result.get('to')}")
-    print(f"   Message SID: {result.get('message_sid')}")
+    if result.get("message_sid"):
+        print(f"   Message SID: {result.get('message_sid')}")
+    if result.get("message_id"):
+        print(f"   Message ID: {result.get('message_id')}")
     print(f"   Trace ID: {result.get('trace_id')}")
     print(f"   Timestamp: {result.get('timestamp')}")
     print("\n[OK] Check WhatsApp to confirm delivery!")

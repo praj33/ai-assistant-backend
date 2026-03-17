@@ -69,7 +69,10 @@ try:
         print("[SUCCESS] WHATSAPP MESSAGE SENT!")
         print("=" * 70)
         print(f"\nTo: {execution.get('to')}")
-        print(f"Message SID: {execution.get('message_sid')}")
+        if execution.get("message_sid"):
+            print(f"Message SID: {execution.get('message_sid')}")
+        if execution.get("message_id"):
+            print(f"Message ID: {execution.get('message_id')}")
         print("\nCheck WhatsApp: +919136919017")
         print("\nFull response saved to: whatsapp_execution_response.json")
     elif execution_status == "error":

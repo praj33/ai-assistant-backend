@@ -20,6 +20,8 @@ from app.executors.device_gateway_executor import DeviceGatewayExecutor
 from app.core.gateway_auth import GatewayAuth
 from app.external.enforcement.enforcement_verdict import EnforcementVerdict
 from app.services.telegram_contact_service import TelegramContactService
+from app.services.outbound_safety_gate import OutboundSafetyGate, OutboundSafetyDecision
+from app.services.unified_schema_service import build_outbound_payload
 
 
 class ExecutionService:
@@ -40,6 +42,7 @@ class ExecutionService:
         self.reminder = ReminderExecutor()
         self.ems = EMSExecutor()
         self.device_gateway = DeviceGatewayExecutor()
+        self.outbound_safety = OutboundSafetyGate()
 
     def _coerce_enforcement_verdict(self, enforcement_input: Any, trace_id: str) -> EnforcementVerdict:
         if isinstance(enforcement_input, EnforcementVerdict):
@@ -92,6 +95,79 @@ class ExecutionService:
             required_fields=("decision", "trace_id"),
             expected_trace_id=trace_id,
         )
+
+    def _apply_outbound_safety_gate(
+        self,
+        *,
+        platform: str,
+        action_data: Dict[str, Any],
+        trace_id: str,
+    ) -> tuple[Dict[str, Any] | None, Dict[str, Any] | None]:
+        if not self.outbound_safety.is_enabled():
+            return action_data, None
+
+        recipient = action_data.get("recipient", action_data.get("to", ""))
+        content_type = action_data.get("content_type", "message")
+        urgency_level = action_data.get("urgency_level", "low")
+
+        body_text = action_data.get("message", "")
+        subject_text = ""
+        if platform == "email":
+            subject_text = action_data.get("subject", "")
+            body_text = action_data.get("body", body_text)
+
+        body_result = self.outbound_safety.evaluate(
+            content=body_text,
+            recipient=str(recipient or ""),
+            channel=platform,
+            content_type=content_type,
+            urgency_level=urgency_level,
+        )
+
+        subject_result = None
+        if platform == "email" and subject_text:
+            subject_result = self.outbound_safety.evaluate(
+                content=subject_text,
+                recipient=str(recipient or ""),
+                channel=platform,
+                content_type="subject",
+                urgency_level=urgency_level,
+            )
+
+        decision = body_result.decision
+        if subject_result and subject_result.decision == OutboundSafetyDecision.REJECTED:
+            decision = OutboundSafetyDecision.REJECTED
+        elif subject_result and subject_result.decision == OutboundSafetyDecision.MODIFIED:
+            if decision == OutboundSafetyDecision.APPROVED:
+                decision = OutboundSafetyDecision.MODIFIED
+
+        safety_payload = {
+            "decision": decision.value,
+            "body": body_result.to_dict(),
+            "subject": subject_result.to_dict() if subject_result else None,
+            "platform": platform,
+        }
+
+        from app.services.bucket_service import BucketService
+        BucketService().log_event(
+            trace_id or body_result.trace_id,
+            "outbound_safety_gate",
+            safety_payload,
+        )
+
+        if decision == OutboundSafetyDecision.REJECTED:
+            return None, safety_payload
+
+        safe_action = dict(action_data)
+        if body_result.decision == OutboundSafetyDecision.MODIFIED:
+            if platform == "email":
+                safe_action["body"] = body_result.approved_text
+            else:
+                safe_action["message"] = body_result.approved_text
+        if subject_result and subject_result.decision == OutboundSafetyDecision.MODIFIED:
+            safe_action["subject"] = subject_result.approved_text
+
+        return safe_action, safety_payload
 
     @staticmethod
     def _sealed_response(
@@ -212,6 +288,46 @@ class ExecutionService:
             platform = action_type.lower()
             decision = verdict.decision
             gateway_action = "execute"
+
+            # --- OUTBOUND SAFETY GATE ---
+            safe_action_data, outbound_safety = self._apply_outbound_safety_gate(
+                platform=platform,
+                action_data=action_data,
+                trace_id=trace_id,
+            )
+            if outbound_safety and outbound_safety.get("decision") == "rejected":
+                return self._sealed_response(
+                    status="blocked",
+                    action_type=action_type,
+                    reason="Action blocked: outbound safety gate rejected content",
+                    trace_id=trace_id,
+                    verdict=verdict,
+                    extra={"outbound_safety": outbound_safety},
+                )
+            if safe_action_data is not None:
+                action_data = safe_action_data
+
+            # Log outbound payload in unified schema
+            from app.services.bucket_service import BucketService
+            outbound_payload = build_outbound_payload(
+                content=action_data.get("message") or action_data.get("body") or "",
+                user_id=str(action_data.get("user_id") or ""),
+                recipient=str(action_data.get("recipient", action_data.get("to", ""))),
+                channel=platform,
+                action_type=action_data.get("action_type"),
+                metadata={"action_data": action_data},
+                timestamp=datetime.utcnow().isoformat(),
+            )
+            BucketService().log_event(
+                trace_id,
+                "outbound_event",
+                {
+                    "platform": platform,
+                    "action_data": action_data,
+                    "outbound_safety": outbound_safety,
+                    "unified_payload": outbound_payload,
+                },
+            )
             
             # ─── PLATFORM ROUTING ───
             
@@ -223,12 +339,15 @@ class ExecutionService:
                     action=gateway_action,
                     decision=decision,
                 )
-                return self.whatsapp.send_message(
+                result = self.whatsapp.send_message(
                     to_number=action_data.get("recipient", action_data.get("to", "")),
                     message=action_data.get("message", ""),
                     trace_id=trace_id,
                     gateway_auth=gateway_auth,
                 )
+                if outbound_safety:
+                    result["outbound_safety"] = outbound_safety
+                return result
             
             elif platform == "email":
                 gateway_action = "send_message"
@@ -238,13 +357,16 @@ class ExecutionService:
                     action=gateway_action,
                     decision=decision,
                 )
-                return self.email.send_message(
+                result = self.email.send_message(
                     to_email=action_data.get("recipient", action_data.get("to", "")),
                     subject=action_data.get("subject", "Message from AI Assistant"),
                     message=action_data.get("body", action_data.get("message", "")),
                     trace_id=trace_id,
                     gateway_auth=gateway_auth,
                 )
+                if outbound_safety:
+                    result["outbound_safety"] = outbound_safety
+                return result
             
             elif platform == "instagram":
                 gateway_action = "send_message"
@@ -254,12 +376,15 @@ class ExecutionService:
                     action=gateway_action,
                     decision=decision,
                 )
-                return self.instagram.send_message(
+                result = self.instagram.send_message(
                     recipient_id=action_data.get("recipient", action_data.get("to", "")),
                     message=action_data.get("message", ""),
                     trace_id=trace_id,
                     gateway_auth=gateway_auth,
                 )
+                if outbound_safety:
+                    result["outbound_safety"] = outbound_safety
+                return result
             
             elif platform == "telegram":
                 gateway_action = "send_message"
@@ -300,12 +425,15 @@ class ExecutionService:
                         "timestamp": datetime.utcnow().isoformat(),
                         "platform": "telegram",
                     }
-                return self.telegram.send_message(
+                result = self.telegram.send_message(
                     to_chat_id=recipient_str,
                     message=action_data.get("message", ""),
                     trace_id=trace_id,
                     gateway_auth=gateway_auth,
                 )
+                if outbound_safety:
+                    result["outbound_safety"] = outbound_safety
+                return result
             
             elif platform == "calendar":
                 action = action_data.get("action", "create_event")

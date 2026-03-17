@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
-from datetime import datetime
-from typing import Any, Dict
+from datetime import datetime, timezone
+from typing import Any, Dict, Iterable
 
 from fastapi import HTTPException, Request
 
@@ -15,12 +16,12 @@ def _verify_whatsapp_webhook(request: Request, raw_body: bytes) -> bool:
     """
     Verify WhatsApp/META webhook signatures.
 
-    - If WHATSAPP_WEBHOOK_SECRET is not configured, we allow the request
+    - If WHATSAPP_WEBHOOK_SECRET is not configured, allow the request
       but keep this hook wired for future hardening.
-    - If a secret is configured, we require a valid X-Hub-Signature-256
+    - If a secret is configured, require a valid X-Hub-Signature-256
       header computed as: sha256=HMAC_SHA256(secret, body).
     """
-    secret = os.getenv("WHATSAPP_WEBHOOK_SECRET")
+    secret = (os.getenv("WHATSAPP_WEBHOOK_SECRET") or os.getenv("META_APP_SECRET") or "").strip()
     if not secret:
         # Fail-open when no secret configured, but keep hook for wiring.
         return True
@@ -38,8 +39,46 @@ def _verify_whatsapp_webhook(request: Request, raw_body: bytes) -> bool:
         digestmod=hashlib.sha256,
     ).hexdigest()
 
-    # Constant‑time comparison to avoid timing attacks
+    # Constant-time comparison to avoid timing attacks
     return hmac.compare_digest(provided_sig, expected_sig)
+
+
+def _to_iso_timestamp(value: Any) -> str:
+    if value is None:
+        return datetime.utcnow().isoformat()
+    try:
+        ts = int(value)
+        if ts > 10**12:
+            ts = int(ts / 1000)
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    except Exception:
+        return datetime.utcnow().isoformat()
+
+
+def _iter_whatsapp_messages(payload: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
+    entries = payload.get("entry", []) or []
+    for entry in entries:
+        # WhatsApp Cloud API shape
+        for change in entry.get("changes", []) or []:
+            value = change.get("value") or {}
+            for message in value.get("messages", []) or []:
+                yield {
+                    "source": "cloud",
+                    "entry": entry,
+                    "change": change,
+                    "value": value,
+                    "message": message,
+                }
+
+        # Legacy/compat Messenger-like shape
+        for event in entry.get("messaging", []) or []:
+            if event.get("message"):
+                yield {
+                    "source": "legacy",
+                    "entry": entry,
+                    "event": event,
+                    "message": event.get("message") or {},
+                }
 
 
 async def handle_whatsapp_webhook(request: Request) -> Dict[str, Any]:
@@ -51,46 +90,88 @@ async def handle_whatsapp_webhook(request: Request) -> Dict[str, Any]:
         if not _verify_whatsapp_webhook(request, raw_body):
             return {"status": "rejected", "reason": "webhook_verification_failed"}
 
-        # Parse JSON payload after signature verification
         try:
-            payload: Dict[str, Any] = await request.json()
+            payload: Dict[str, Any] = json.loads(raw_body.decode("utf-8") or "{}")
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {str(exc)}") from exc
 
-        entries = payload.get("entry", [])
-        if not entries:
-            return {"status": "ignored", "reason": "no_entries"}
+        messages = list(_iter_whatsapp_messages(payload))
+        if not messages:
+            return {"status": "ignored", "reason": "no_message_events"}
 
-        messaging_events = entries[0].get("messaging", [])
-        if not messaging_events:
-            return {"status": "ignored", "reason": "no_messaging_events"}
+        processed = []
+        ignored = []
 
-        messaging_event = messaging_events[0]
-        if not messaging_event.get("message"):
-            return {"status": "ignored", "reason": "non_message_event"}
+        for item in messages:
+            source = item.get("source")
+            message = item.get("message") or {}
 
-        message_data = messaging_event["message"]
-        if message_data.get("type") != "text":
-            return {"status": "ignored", "reason": f"unsupported_message_type: {message_data.get('type')}"}
+            if source == "cloud":
+                msg_type = message.get("type")
+                if msg_type != "text":
+                    ignored.append({"reason": f"unsupported_message_type:{msg_type}"})
+                    continue
+                text_body = (message.get("text") or {}).get("body")
+                if not text_body:
+                    ignored.append({"reason": "missing_text_body"})
+                    continue
 
-        message_text = message_data["text"]["body"]
-        sender_id = messaging_event.get("sender", {}).get("id", "")
+                value = item.get("value") or {}
+                contacts = value.get("contacts") or []
+                sender_id = message.get("from") or (contacts[0].get("wa_id") if contacts else "")
 
-        result = await process_message(
-            platform="whatsapp",
-            user_id=str(sender_id or ""),
-            message=message_text,
-            timestamp=datetime.utcnow().isoformat(),
-            metadata={"provider": "whatsapp", "event": messaging_event},
-            device="mobile",
-            preferred_language="auto",
-            voice_input=False,
-        )
+                result = await process_message(
+                    platform="whatsapp",
+                    user_id=str(sender_id or ""),
+                    message=text_body,
+                    timestamp=_to_iso_timestamp(message.get("timestamp")),
+                    metadata={
+                        "provider": "whatsapp",
+                        "source": "cloud",
+                        "message_id": message.get("id"),
+                        "contacts": contacts,
+                        "metadata": value.get("metadata"),
+                        "event": item,
+                    },
+                    device="mobile",
+                    preferred_language="auto",
+                    voice_input=False,
+                )
+                processed.append(result)
+                continue
+
+            # Legacy webhook payloads
+            text_value = message.get("text")
+            if isinstance(text_value, dict):
+                text_value = text_value.get("body")
+            if not text_value:
+                ignored.append({"reason": "missing_text_body"})
+                continue
+
+            event = item.get("event") or {}
+            sender_id = (event.get("sender") or {}).get("id", "")
+
+            result = await process_message(
+                platform="whatsapp",
+                user_id=str(sender_id or ""),
+                message=str(text_value),
+                timestamp=_to_iso_timestamp(event.get("timestamp")),
+                metadata={"provider": "whatsapp", "source": "legacy", "event": event},
+                device="mobile",
+                preferred_language="auto",
+                voice_input=False,
+            )
+            processed.append(result)
+
+        if not processed:
+            return {"status": "ignored", "reason": "no_supported_messages", "ignored": ignored}
 
         return {
             "status": "processed",
-            "trace_id": result.get("trace_id"),
+            "count": len(processed),
+            "trace_id": processed[0].get("trace_id"),
             "processed_at": datetime.utcnow().isoformat(),
+            "ignored": ignored,
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Webhook processing error: {str(exc)}") from exc

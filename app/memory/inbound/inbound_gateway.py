@@ -5,6 +5,8 @@ from typing import Any, Dict, Optional
 
 from app.core.assistant_orchestrator import handle_assistant_request
 from app.services.bucket_service import BucketService
+from app.services.inbound_mediation_service import InboundMediationService, InboundDecision
+from app.services.unified_schema_service import build_inbound_payload
 
 
 def _build_internal_request(
@@ -65,6 +67,69 @@ async def process_message(
     if not message:
         return {"status": "ignored", "reason": "empty_message"}
 
+    metadata = metadata or {}
+    original_message = message
+
+    mediation_service = InboundMediationService()
+    mediation_result: Dict[str, Any] | None = None
+    if mediation_service.is_enabled_for_platform(platform):
+        mediation = mediation_service.evaluate(
+            content=original_message,
+            sender_id=str(metadata.get("sender_id") or user_id or ""),
+            recipient_id=str(metadata.get("recipient_id") or "assistant"),
+            platform=platform,
+            timestamp=timestamp,
+        )
+        mediation_result = mediation.to_dict()
+        BucketService().log_event(
+            mediation.trace_id,
+            "inbound_mediation",
+            {
+                "platform": platform,
+                "user_id": str(user_id or ""),
+                "decision": mediation_result.get("decision"),
+                "risk_category": mediation_result.get("risk_category"),
+                "reason": mediation_result.get("reason"),
+                "timestamp": timestamp or datetime.utcnow().isoformat(),
+            },
+        )
+
+        if mediation.decision in {InboundDecision.SILENCE, InboundDecision.DELAY, InboundDecision.ESCALATE}:
+            unified_payload = build_inbound_payload(
+                content=original_message,
+                source=str(metadata.get("source") or metadata.get("sender") or user_id or ""),
+                user_id=str(user_id or ""),
+                channel=platform,
+                metadata=metadata,
+                timestamp=timestamp,
+                message_id=metadata.get("message_id"),
+            )
+            BucketService().log_event(
+                mediation.trace_id,
+                "inbound_event",
+                {
+                    "platform": platform,
+                    "user_id": str(user_id or ""),
+                    "message": original_message,
+                    "timestamp": timestamp or datetime.utcnow().isoformat(),
+                    "metadata": metadata,
+                    "mediation": mediation_result,
+                    "unified_payload": unified_payload,
+                },
+            )
+            return {
+                "status": mediation.decision.value,
+                "reason": mediation_result.get("reason"),
+                "trace_id": mediation.trace_id,
+                "mediation": mediation_result,
+            }
+
+        if mediation.decision == InboundDecision.SUMMARIZE and mediation.safe_summary:
+            message = mediation.safe_summary
+            metadata = dict(metadata)
+            metadata["original_message"] = original_message
+            metadata["inbound_mediation"] = mediation_result
+
     internal_request = _build_internal_request(
         message=message,
         platform=platform,
@@ -73,13 +138,22 @@ async def process_message(
         voice_input=voice_input,
         preferred_language=preferred_language,
         principal=str(user_id or ""),
-        metadata=metadata or {},
+        metadata=metadata,
     )
 
     result = await handle_assistant_request(internal_request)
     trace_id = result.get("trace_id")
 
     # Log inbound event with trace for observability.
+    unified_payload = build_inbound_payload(
+        content=original_message,
+        source=str(metadata.get("source") or metadata.get("sender") or user_id or ""),
+        user_id=str(user_id or ""),
+        channel=platform,
+        metadata=metadata,
+        timestamp=timestamp,
+        message_id=metadata.get("message_id"),
+    )
     BucketService().log_event(
         trace_id or "trace_missing",
         "inbound_event",
@@ -88,7 +162,9 @@ async def process_message(
             "user_id": str(user_id or ""),
             "message": message,
             "timestamp": timestamp or datetime.utcnow().isoformat(),
-            "metadata": metadata or {},
+            "metadata": metadata,
+            "mediation": mediation_result,
+            "unified_payload": unified_payload,
         },
     )
 
