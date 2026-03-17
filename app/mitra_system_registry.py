@@ -43,7 +43,9 @@ class MitraSystemRegistry:
             "bucket": self.bucket_service.get_status()
             if hasattr(self.bucket_service, "get_status")
             else {"service": "bucket_service", "status": "unknown"},
-            "audio": {"service": "audio_service", "status": "active"},
+            "audio": self.audio_service.get_tts_status()
+            if hasattr(self.audio_service, "get_tts_status")
+            else {"service": "audio_service", "status": "active"},
         }
 
 

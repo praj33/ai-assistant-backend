@@ -481,11 +481,24 @@ async def handle_assistant_request(request):
         else:
             detected_language = request.context.detected_language
             language_metadata = multilingual_service.get_language_metadata(text)
-        
+
+        # ── Translate non-English input to English for processing ──
+        original_user_text = text
+        needs_translation = language_metadata.get("needs_translation", False)
+        if needs_translation and detected_language != "en":
+            try:
+                text = multilingual_service.translate_to_english(text, source_lang=detected_language)
+                logger.info(f"[{trace_id}] Translated input from {detected_language} to English")
+            except Exception as e:
+                logger.warning(f"[{trace_id}] Input translation failed: {e}, using original text")
+                # Continue with original text if translation fails
+
         # Log initial request
         log_to_bucket(trace_id, "request_received", {
             "input_text": text,
+            "original_text": original_user_text,
             "detected_language": detected_language,
+            "needs_translation": needs_translation,
             "preferred_language": request.context.preferred_language,
             "context": request.context.dict() if hasattr(request.context, 'dict') else str(request.context),
             "timestamp": datetime.utcnow().isoformat()
@@ -705,20 +718,42 @@ async def handle_assistant_request(request):
         # -------------------------------
         # FINAL RESPONSE & LOGGING
         # -------------------------------
-        
-        # Prepare audio response if requested
+
+        # ── Translate response back to user's language ──
+        response_in_user_language = response_text
+        target_language = request.context.preferred_language if request.context.preferred_language != "auto" else detected_language
+        if needs_translation and target_language != "en":
+            try:
+                response_in_user_language = multilingual_service.translate_from_english(
+                    response_text, target_lang=target_language
+                )
+                logger.info(f"[{trace_id}] Translated response to {target_language}")
+            except Exception as e:
+                logger.warning(f"[{trace_id}] Response translation failed: {e}, using English")
+                response_in_user_language = response_text
+
+        # Update language metadata with translation info
+        language_metadata["original_response_english"] = response_text
+        language_metadata["response_language"] = target_language
+
+        # Use translated response as the final response text
+        final_response_text = response_in_user_language
+
+        # ── Generate TTS audio (XTTS engine) ──
         audio_response = None
         if request.context.audio_output_requested:
             try:
-                target_language = request.context.preferred_language if request.context.preferred_language != "auto" else detected_language
-                audio_response = audio_service.text_to_speech(response_text, language=target_language)
+                audio_response = await audio_service.text_to_speech_async(
+                    final_response_text, language=target_language
+                )
+                if audio_response:
+                    logger.info(f"[{trace_id}] XTTS audio generated: {len(audio_response)} bytes")
             except Exception as e:
-                logger.warning(f"[{trace_id}] Audio generation failed: {str(e)}, continuing without audio")
-                # Don't fail the entire request if audio generation fails, just continue without audio
-        
+                logger.warning(f"[{trace_id}] XTTS audio generation failed: {e}, continuing without audio")
+
         final_response = success_response(
             result_type=result_type,
-            response_text=response_text,
+            response_text=final_response_text,
             task=task if 'task' in locals() else None,
             enforcement=enforcement_result,
             safety=safety_result,
