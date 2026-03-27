@@ -8,9 +8,11 @@ Exposes a single public API for frontend integration.
 ## Public API
 
 POST /api/assistant  
+POST /api/mitra/evaluate  
 GET /health
 
-`/api/assistant` is the only supported endpoint.
+`/api/assistant` remains the assistant entrypoint.
+`/api/mitra/evaluate` exposes Mitra's existing deterministic decision flow for structured event input.
 All other functionality is internal and not part of the public contract.
 
 ---

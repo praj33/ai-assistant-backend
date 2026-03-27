@@ -40,6 +40,7 @@ from app.core.logging import setup_logging, get_logger
 from app.core.database import create_tables
 from app.core.security import rate_limit, audit_log
 from app.api.assistant import router as assistant_router
+from app.api.mitra_api import router as mitra_router
 from app.api.webhooks import router as webhook_router
 from app.api.tts import router as tts_router
 from app.executors.telegram_executor import TelegramExecutor
@@ -217,6 +218,7 @@ async def security_middleware(request: Request, call_next):
 # ONLY PUBLIC ROUTER (LOCKED)
 # -------------------------------------------------
 app.include_router(assistant_router)
+app.include_router(mitra_router)
 app.include_router(webhook_router)
 app.include_router(tts_router)
 
@@ -231,6 +233,7 @@ async def root():
         "endpoints": {
             "health": "/health",
             "assistant": "/api/assistant",
+            "mitra_evaluate": "/api/mitra/evaluate",
             "tts": "/api/tts",
             "tts_status": "/api/tts/status"
         },
