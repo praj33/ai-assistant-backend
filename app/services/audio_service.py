@@ -7,6 +7,7 @@ Includes speech-to-text via SpeechRecognition library.
 
 import io
 import asyncio
+import importlib.util
 import logging
 from typing import Dict, Any, Optional
 
@@ -24,14 +25,23 @@ try:
 except ImportError:
     SR_AVAILABLE = False
 
-# Import TTS provider from mitra_tts_integration
+def _has_optional_dependency(module_name: str) -> bool:
+    return importlib.util.find_spec(module_name) is not None
+
+
+_XTTS_RUNTIME_READY = _has_optional_dependency("TTS") and _has_optional_dependency("torch")
+
+# Import TTS provider from mitra_tts_integration only when optional runtime deps exist.
 try:
-    from app.services.mitra_tts_integration.tts_provider import tts_provider
-    XTTS_AVAILABLE = True
-except ImportError:
+    if _XTTS_RUNTIME_READY:
+        from app.services.mitra_tts_integration.tts_provider import tts_provider
+        XTTS_AVAILABLE = True
+    else:
+        raise ImportError("Optional XTTS runtime dependencies are not installed")
+except Exception:
     XTTS_AVAILABLE = False
     tts_provider = None
-    logger.warning("[AudioService] mitra_tts_integration not available, TTS disabled")
+    logger.warning("[AudioService] XTTS optional dependencies unavailable, TTS disabled")
 
 
 class AudioService:

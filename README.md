@@ -51,3 +51,12 @@ GET /health
 ## Status
 
 Backend locked and safe for frontend.
+
+## Optional TTS Runtime
+
+The main backend deploy does not require Coqui XTTS.
+Optional TTS dependencies are isolated from the base deployment so the core API can build reliably on Render.
+
+To enable the XTTS stack on a dedicated environment, install:
+
+`pip install -r requirements-tts.txt`

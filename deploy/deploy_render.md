@@ -16,6 +16,10 @@
    - **Runtime**: Python 3
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Python Version**: `3.11.9`
+   - This repo includes `.python-version` and `PYTHON_VERSION=3.11.9`
+   - The core Render deploy intentionally excludes optional XTTS packages from `requirements.txt` so Render builds do not fail on unsupported Python versions
+   - If you need Coqui XTTS in a dedicated environment, install `pip install -r requirements-tts.txt`
 
 3. **Environment Variables**:
     Add these in Render's Environment section:
