@@ -11,6 +11,12 @@ import importlib.util
 import logging
 from typing import Dict, Any, Optional
 
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
+
 logger = logging.getLogger("AudioService")
 
 try:
@@ -88,25 +94,35 @@ class AudioService:
 
     async def text_to_speech_async(self, text: str, language: str = "en") -> bytes:
         """
-        Convert text to speech using XTTS engine (async).
-        
-        Args:
-            text: Text to synthesize.
-            language: ISO 639-1 language code.
-            
-        Returns:
-            bytes: WAV audio data.
+        Convert text to speech (async).
+        Cascade: XTTS (Primary) -> gTTS (Fallback).
         """
-        if not self._tts_provider:
-            logger.warning("[AudioService] TTS provider not available")
-            return b""
+        # 1. Try XTTS (Local Premium)
+        if self._tts_provider:
+            try:
+                audio_bytes = await self._tts_provider.generate_audio(text, language=language)
+                if audio_bytes:
+                    return audio_bytes
+            except Exception as e:
+                logger.warning(f"[AudioService] XTTS failed, falling back to gTTS: {e}")
 
-        try:
-            audio_bytes = await self._tts_provider.generate_audio(text, language=language)
-            return audio_bytes or b""
-        except Exception as e:
-            logger.error(f"[AudioService] TTS failed: {e}")
-            return b""
+        # 2. Try gTTS (Cloud Basic)
+        if GTTS_AVAILABLE:
+            try:
+                # Run gTTS in a thread since it's a blocking network call
+                def _generate_gtts():
+                    tts = gTTS(text=text, lang=language)
+                    fp = io.BytesIO()
+                    tts.write_to_fp(fp)
+                    return fp.getvalue()
+
+                audio_bytes = await asyncio.to_thread(_generate_gtts)
+                return audio_bytes or b""
+            except Exception as e:
+                logger.error(f"[AudioService] gTTS fallback failed: {e}")
+
+        logger.error("[AudioService] No TTS providers available (XTTS offline, gTTS unavailable)")
+        return b""
 
     def _sync_tts(self, text: str, language: str) -> bytes:
         """Helper to run async TTS in a new event loop (for sync callers)."""
