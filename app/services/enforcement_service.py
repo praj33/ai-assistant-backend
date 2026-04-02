@@ -2,6 +2,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Dict
 
+from app.core.mitra_entry_guard import get_mitra_entry_scope
 from app.external.enforcement import enforcement_engine
 
 
@@ -116,9 +117,25 @@ class EnforcementService:
         calls Raj's `enforcement_engine.enforce()`, then adapts the verdict to the dict
         surface consumed by the orchestrator.
         """
+        request_trace_id = self._normalize_trace_id(trace_id)
+        scope = get_mitra_entry_scope()
+        if not scope or str(scope.get("trace_id") or "") != str(request_trace_id or ""):
+            from app.services.bucket_service import BucketService
+
+            if request_trace_id:
+                BucketService().log_event(
+                    request_trace_id,
+                    "enforcement_bypass_blocked",
+                    {
+                        "trace_id": request_trace_id,
+                        "reason": "Direct enforcement access blocked. Use Mitra control plane.",
+                        "source": scope.get("source") if scope else None,
+                    },
+                )
+            raise PermissionError("Direct enforcement access blocked. Use Mitra control plane.")
+
         safety = payload.get("safety") or {}
         intelligence = payload.get("intelligence") or {}
-        request_trace_id = self._normalize_trace_id(trace_id)
         mediation_trace_id = self._normalize_trace_id(
             safety.get("trace_id") if isinstance(safety, dict) else None
         )

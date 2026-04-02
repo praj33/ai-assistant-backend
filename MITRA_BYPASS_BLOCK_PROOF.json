@@ -1,0 +1,15 @@
+{
+  "blocked": true,
+  "error": "PermissionError",
+  "message": "Direct enforcement access blocked. Use Mitra control plane.",
+  "trace_id": "trace_review_direct_bypass",
+  "bucket_log": {
+    "trace_id": "trace_review_direct_bypass",
+    "stage": "enforcement_bypass_blocked",
+    "data": {
+      "trace_id": "trace_review_direct_bypass",
+      "reason": "Direct enforcement access blocked. Use Mitra control plane.",
+      "source": null
+    }
+  }
+}

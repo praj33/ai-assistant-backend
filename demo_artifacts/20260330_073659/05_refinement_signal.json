@@ -1,0 +1,36 @@
+{
+  "http_status": 200,
+  "input": {
+    "context": {
+      "device": "api",
+      "platform": "samachar",
+      "session_id": "demo_refine_session"
+    },
+    "event": {
+      "category": "weather",
+      "confidence": 0.92,
+      "content": "Let me rephrase: share the same school weather update for tomorrow morning only.",
+      "title": "Weather brief refinement"
+    },
+    "user_id": "demo_refine_user"
+  },
+  "output": {
+    "confidence": 0.0,
+    "reason": "Content passed existing safety validation and enforcement checks.",
+    "risk_level": "LOW",
+    "signal_type": "intent_refinement",
+    "status": "ALLOW",
+    "system_context": {
+      "category": "weather",
+      "device": "api",
+      "enforcement_trace_id": "enf_c469aa4496f825e4",
+      "platform": "samachar",
+      "preferred_language": "auto",
+      "session_id": "demo_refine_session",
+      "source": "/api/mitra/evaluate",
+      "user_id": "demo_refine_user",
+      "voice_input": false
+    },
+    "trace_id": "trace_9bb29caf64f9f3e1"
+  }
+}

@@ -13,6 +13,7 @@ from app.core.database import get_db
 
 from app.mitra_system_registry import mitra_registry
 from app.karma_adapter import fetch_user_karma, karma_bias_from_points
+from app.services.mitra_control_plane_service import MitraAuthorityInput, MitraControlPlaneService
 from app.services.multilingual_service import MultilingualService
 from app.external.enforcement.deterministic_trace import (
     generate_trace_id as generate_deterministic_trace_id,
@@ -37,6 +38,7 @@ bucket_service = mitra_registry.bucket_service
 execution_service = mitra_registry.execution_service
 multilingual_service = MultilingualService()
 audio_service = mitra_registry.audio_service
+mitra_control_plane_service = MitraControlPlaneService()
 
 def _to_namespace(value):
     if isinstance(value, dict):
@@ -493,80 +495,46 @@ async def handle_assistant_request(request):
                 logger.warning(f"[{trace_id}] Input translation failed: {e}, using original text")
                 # Continue with original text if translation fails
 
-        # Log initial request
-        log_to_bucket(trace_id, "request_received", {
-            "input_text": text,
-            "original_text": original_user_text,
-            "detected_language": detected_language,
-            "needs_translation": needs_translation,
-            "preferred_language": request.context.preferred_language,
-            "context": request.context.dict() if hasattr(request.context, 'dict') else str(request.context),
-            "timestamp": datetime.utcnow().isoformat()
-        })
-        safety_context = {
-            "age_gate_status": bool(getattr(request.context, "age_gate_status", False)),
-            "region_rule_status": _to_plain(getattr(request.context, "region_policy", None)),
-            "platform_policy_state": platform_policy,
-        }
-        
-        # -------------------------------
-        # STEP 1: SAFETY GATE (Aakansha)
-        # -------------------------------
-        logger.info(f"[{trace_id}] Calling Safety Service")
-        safety_result = call_safety_service(text, trace_id, safety_context)
-        
-        # -------------------------------
-        # STEP 2: INTELLIGENCE (Sankalp)
-        # -------------------------------
-        logger.info(f"[{trace_id}] Calling Intelligence Service")
-        principal = getattr(request.context, "authenticated_user_context", None)
-        if isinstance(principal, dict):
-            principal_id = principal.get("principal")
-        else:
-            principal_id = None
-
-        karma_data = fetch_user_karma(principal_id)
-
-        intelligence_context = {
-            "user_input": text,
-            "platform": request.context.platform if hasattr(request.context, 'platform') else "web",
-            "session_id": request.context.session_id if hasattr(request.context, 'session_id') else None,
-            "karma_data": karma_data,
-        }
-        intelligence_result = call_intelligence_service(intelligence_context, trace_id)
-
-        # Ensure a deterministic karma_score is always present for enforcement.
-        intelligence_result.setdefault("karma_score", karma_data.get("karma_points", 50))
-        
-        # -------------------------------
-        # STEP 3: ENFORCEMENT (Raj)
-        # -------------------------------
-        logger.info(f"[{trace_id}] Calling Enforcement Service")
-        raw_risk_flags = intelligence_result.get("risk_flags", [])
-        if isinstance(raw_risk_flags, str):
-            raw_risk_flags = [raw_risk_flags]
-        elif not isinstance(raw_risk_flags, list):
-            raw_risk_flags = [raw_risk_flags] if raw_risk_flags else []
-
-        raw_karma_score = intelligence_result.get("karma_score")
-        karma_score = int(raw_karma_score) if isinstance(raw_karma_score, (int, float)) else 50
-
-        enforcement_payload = {
-            "safety": safety_result,
-            "intelligence": intelligence_result,
-            "user_input": text,
-            "emotional_output": text,
-            "intent": intelligence_result.get("intent") or "general",
-            "trace_id": trace_id,
-            "age_gate_status": bool(getattr(request.context, "age_gate_status", False)),
-            "region_policy": _to_plain(getattr(request.context, "region_policy", None)),
-            "platform_policy": platform_policy,
-            "karma_score": karma_score,
-            "risk_flags": raw_risk_flags,
-            "authenticated_user_context": authenticated_user_context,
-            "user_context": authenticated_user_context,
-        }
-        enforcement_result = call_enforcement_service(enforcement_payload, trace_id)
+        authority_result = mitra_control_plane_service.evaluate(
+            MitraAuthorityInput(
+                input_text=text,
+                raw_input={
+                    "message": text,
+                    "original_text": original_user_text,
+                    "detected_language": detected_language,
+                    "needs_translation": needs_translation,
+                    "preferred_language": request.context.preferred_language,
+                    "context": request.context.dict() if hasattr(request.context, "dict") else str(request.context),
+                },
+                category="assistant_request",
+                user_id=str(authenticated_user_context.get("principal") or trace_id),
+                session_id=getattr(request.context, "session_id", None),
+                platform=getattr(request.context, "platform", "web"),
+                device=getattr(request.context, "device", "unknown"),
+                voice_input=bool(getattr(request.context, "voice_input", False)),
+                preferred_language=getattr(request.context, "preferred_language", "auto"),
+                authenticated_user_context=authenticated_user_context,
+                system_context={
+                    "detected_language": detected_language,
+                    "needs_translation": needs_translation,
+                },
+                trace_seed_payload=_canonical_request_trace_payload(
+                    request=request,
+                    authenticated_user_context=authenticated_user_context,
+                    platform_policy=platform_policy,
+                    audio_fingerprint=_audio_fingerprint(getattr(request.input, "audio_data", None)),
+                ),
+                trace_id=trace_id,
+                source="/api/assistant",
+                age_gate_status=bool(getattr(request.context, "age_gate_status", False)),
+                region_policy=_to_plain(getattr(request.context, "region_policy", None)),
+            )
+        )
+        safety_result = authority_result["safety_result"]
+        intelligence_result = authority_result["intelligence_result"]
+        enforcement_result = authority_result["enforcement_result"]
+        mitra_contract = authority_result["response_contract"]
+        trace_id = authority_result["trace_id"]
         
         # Handle enforcement decisions
         if enforcement_result.get("decision") == "TERMINATE":
@@ -577,6 +545,8 @@ async def handle_assistant_request(request):
             return terminated_response(
                 enforcement=enforcement_result,
                 trace_id=trace_id,
+                signal_type=mitra_contract.get("signal_type"),
+                system_context=mitra_contract.get("system_context"),
             )
 
         if enforcement_result.get("decision") == "BLOCK":
@@ -589,7 +559,10 @@ async def handle_assistant_request(request):
                 response_text=_blocked_response_text(safety_result),
                 enforcement=enforcement_result,
                 safety=safety_result,
-                trace_id=trace_id
+                trace_id=trace_id,
+                signal_type=mitra_contract.get("signal_type"),
+                system_context=mitra_contract.get("system_context"),
+                mitra=mitra_contract,
             )
         
         # -------------------------------
@@ -760,7 +733,10 @@ async def handle_assistant_request(request):
             execution=execution_result,
             trace_id=trace_id,
             language_metadata=language_metadata,
-            audio_response=audio_response
+            audio_response=audio_response,
+            signal_type=mitra_contract.get("signal_type"),
+            system_context=mitra_contract.get("system_context"),
+            mitra=mitra_contract,
         )
         
         log_to_bucket(trace_id, "response_generated", {
@@ -792,7 +768,20 @@ async def handle_assistant_request(request):
 # Response helpers (LOCKED)
 # ==============================
 
-def success_response(result_type, response_text, task=None, enforcement=None, safety=None, execution=None, trace_id=None, language_metadata=None, audio_response=None):
+def success_response(
+    result_type,
+    response_text,
+    task=None,
+    enforcement=None,
+    safety=None,
+    execution=None,
+    trace_id=None,
+    language_metadata=None,
+    audio_response=None,
+    signal_type=None,
+    system_context=None,
+    mitra=None,
+):
     response = {
         "version": "3.0.0",
         "status": "success",
@@ -806,6 +795,8 @@ def success_response(result_type, response_text, task=None, enforcement=None, sa
         },
         "processed_at": datetime.utcnow().isoformat() + "Z",
         "trace_id": trace_id,
+        "signal_type": signal_type,
+        "system_context": system_context,
     }
     
     # Add language metadata if provided
@@ -815,11 +806,17 @@ def success_response(result_type, response_text, task=None, enforcement=None, sa
     # Add audio response if provided
     if audio_response:
         response["result"]["audio_response"] = audio_response
+
+    if system_context:
+        response["result"]["system_context"] = system_context
+
+    if mitra:
+        response["result"]["mitra"] = mitra
     
     return response
 
 
-def error_response(code, message, trace_id=None):
+def error_response(code, message, trace_id=None, signal_type=None, system_context=None):
     return {
         "version": "3.0.0",
         "status": "error",
@@ -829,10 +826,17 @@ def error_response(code, message, trace_id=None):
         },
         "processed_at": datetime.utcnow().isoformat() + "Z",
         "trace_id": trace_id,
+        "signal_type": signal_type,
+        "system_context": system_context,
     }
 
 
-def terminated_response(enforcement: Dict[str, Any], trace_id: str):
+def terminated_response(
+    enforcement: Dict[str, Any],
+    trace_id: str,
+    signal_type: Optional[str] = None,
+    system_context: Optional[Dict[str, Any]] = None,
+):
     return {
         "version": "3.0.0",
         "status": "error",
@@ -843,6 +847,8 @@ def terminated_response(enforcement: Dict[str, Any], trace_id: str):
         },
         "processed_at": datetime.utcnow().isoformat() + "Z",
         "trace_id": trace_id,
+        "signal_type": signal_type,
+        "system_context": system_context,
     }
 
 # Fixed audio_data handling for Swagger UI compatibility

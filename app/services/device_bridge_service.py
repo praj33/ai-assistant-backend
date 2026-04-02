@@ -11,15 +11,15 @@ Safety -> Enforcement -> ExecutionService -> DeviceGatewayExecutor
 import json
 from typing import Any, Dict
 
-from app.services.enforcement_service import EnforcementService
 from app.services.execution_service import ExecutionService
+from app.services.mitra_control_plane_service import MitraAuthorityInput, MitraControlPlaneService
 
 
 class DeviceBridgeService:
     """Facade for sending device commands through the universal execution gateway."""
 
     def __init__(self) -> None:
-        self.enforcement = EnforcementService()
+        self.control_plane = MitraControlPlaneService()
         self.gateway = ExecutionService()
 
     def send_command(
@@ -43,22 +43,29 @@ class DeviceBridgeService:
             "payload": payload or {},
         }
         command_summary = json.dumps(action_data, sort_keys=True, default=str)
-        enforcement_payload = {
-            "user_input": f"device_gateway:{command_summary}",
-            "intent": "device_gateway_command",
-            "trace_id": trace_id,
-            "platform_policy": {
-                "platform": "device_gateway",
-                "device_type": device_type,
-            },
-            "authenticated_user_context": authenticated_user_context or {
-                "session_id": device_id,
-                "platform": "device_gateway",
-                "device": device_type,
-                "auth_method": "device_bridge_service",
-            },
+        auth_context = authenticated_user_context or {
+            "session_id": device_id,
+            "platform": "device_gateway",
+            "device": device_type,
+            "auth_method": "device_bridge_service",
+            "principal": device_id or "device_gateway",
         }
-        enforcement_result = self.enforcement.enforce_policy(payload=enforcement_payload, trace_id=trace_id)
+        authority_result = self.control_plane.evaluate(
+            MitraAuthorityInput(
+                input_text=f"device_gateway:{command_summary}",
+                raw_input=action_data,
+                category="device_gateway_command",
+                user_id=str(auth_context.get("principal") or device_id or "device_gateway"),
+                session_id=device_id or None,
+                platform="device_gateway",
+                device=device_type or "device",
+                authenticated_user_context=auth_context,
+                trace_id=trace_id,
+                source="device_bridge_service",
+            )
+        )
+        enforcement_result = authority_result["enforcement_result"]
+        trace_id = authority_result["trace_id"]
         return self.gateway.execute_action(
             "device_gateway",
             action_data,

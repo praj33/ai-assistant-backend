@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
+from app.core.mitra_entry_guard import mitra_enforcement_scope
 from app.services.bucket_service import BucketService
 from app.services.enforcement_service import EnforcementService
 
@@ -57,7 +58,8 @@ def _run_once(scenario: ReplayScenario) -> Dict[str, Any]:
     service = EnforcementService()
     safety_payload = dict(scenario.payload["safety"])
     _seed_mediation_artifact(scenario.trace_id, safety_payload)
-    verdict = service.enforce_policy(dict(scenario.payload), scenario.trace_id)
+    with mitra_enforcement_scope(scenario.trace_id, "replay_validation"):
+        verdict = service.enforce_policy(dict(scenario.payload), scenario.trace_id)
     return _verdict_snapshot(verdict)
 
 

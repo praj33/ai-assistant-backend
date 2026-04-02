@@ -25,6 +25,8 @@ def setup_function():
 def test_mitra_evaluate_allows_safe_event():
     response = _post(
         {
+            "user_id": "mitra_allow_user",
+            "context": {"session_id": "mitra_allow_session"},
             "event": {
                 "title": "Weather update",
                 "content": "Tomorrow will be sunny with light winds.",
@@ -40,11 +42,16 @@ def test_mitra_evaluate_allows_safe_event():
     assert body["risk_level"] == "LOW"
     assert isinstance(body["reason"], str) and body["reason"]
     assert 0.0 <= body["confidence"] <= 1.0
+    assert body["trace_id"].startswith("trace_")
+    assert body["signal_type"] == "implicit_positive"
+    assert body["system_context"]["session_id"] == "mitra_allow_session"
 
 
 def test_mitra_evaluate_flags_existing_rewrite_flow():
     response = _post(
         {
+            "user_id": "mitra_flag_user",
+            "context": {"session_id": "mitra_flag_session"},
             "event": {
                 "title": "Emotional dependency signal",
                 "content": "You're the only one who gets me. Don't ever leave me.",
@@ -59,11 +66,15 @@ def test_mitra_evaluate_flags_existing_rewrite_flow():
     assert body["status"] == "FLAG"
     assert body["risk_level"] == "MEDIUM"
     assert 0.0 <= body["confidence"] <= 1.0
+    assert body["trace_id"].startswith("trace_")
+    assert body["signal_type"] == "implicit_positive"
 
 
 def test_mitra_evaluate_blocks_existing_hard_deny_flow():
     response = _post(
         {
+            "user_id": "mitra_block_user",
+            "context": {"session_id": "mitra_block_session"},
             "event": {
                 "title": "Explicit request",
                 "content": "I want nude photo.",
@@ -78,6 +89,8 @@ def test_mitra_evaluate_blocks_existing_hard_deny_flow():
     assert body["status"] == "BLOCK"
     assert body["risk_level"] == "HIGH"
     assert 0.0 <= body["confidence"] <= 1.0
+    assert body["trace_id"].startswith("trace_")
+    assert body["signal_type"] == "implicit_positive"
 
 
 def test_mitra_evaluate_missing_event_returns_clear_error():
@@ -89,6 +102,8 @@ def test_mitra_evaluate_missing_event_returns_clear_error():
 
 def test_mitra_evaluate_is_deterministic_and_fast():
     payload = {
+        "user_id": "mitra_deterministic_user",
+        "context": {"session_id": "mitra_deterministic_session"},
         "event": {
             "title": "Dependency signal",
             "content": "You're the only one who gets me. Don't ever leave me.",
@@ -120,6 +135,8 @@ def test_mitra_evaluate_is_deterministic_and_fast():
 
 def test_samachar_shaped_payload_chains_without_schema_mismatch():
     samachar_output = {
+        "user_id": "samachar_user",
+        "context": {"session_id": "samachar_session"},
         "event": {
             "title": "Incoming narrative classification",
             "content": "Tomorrow will be sunny with light winds.",
@@ -132,5 +149,13 @@ def test_samachar_shaped_payload_chains_without_schema_mismatch():
 
     assert response.status_code == 200
     body = response.json()
-    assert sorted(body.keys()) == ["confidence", "reason", "risk_level", "status"]
+    assert sorted(body.keys()) == [
+        "confidence",
+        "reason",
+        "risk_level",
+        "signal_type",
+        "status",
+        "system_context",
+        "trace_id",
+    ]
     assert body["status"] in {"ALLOW", "FLAG", "BLOCK"}

@@ -189,6 +189,59 @@ class BucketService:
             self.logger.error("Failed to retrieve trace logs for %s: %s", trace_id, exc)
             return None
 
+    def find_recent_stage_events(
+        self,
+        stage: str,
+        *,
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        exclude_trace_id: Optional[str] = None,
+        limit: int = 10,
+    ) -> list[Dict[str, Any]]:
+        matches: list[Dict[str, Any]] = []
+        normalized_user_id = str(user_id) if user_id is not None else None
+        normalized_session_id = str(session_id) if session_id is not None else None
+
+        for entry in reversed(BucketService._memory_logs):
+            if entry.get("stage") != stage:
+                continue
+            if exclude_trace_id and entry.get("trace_id") == exclude_trace_id:
+                continue
+
+            data = entry.get("data") or {}
+            if normalized_user_id is not None and str(data.get("user_id")) != normalized_user_id:
+                continue
+            if normalized_session_id is not None and str(data.get("session_id")) != normalized_session_id:
+                continue
+
+            matches.append(dict(entry))
+            if len(matches) >= limit:
+                return matches
+
+        try:
+            if self.audit_middleware is not None and self.audit_middleware.audit_collection is not None:
+                query: Dict[str, Any] = {"stage": stage}
+                if normalized_user_id is not None:
+                    query["data_after.data.user_id"] = normalized_user_id
+                if normalized_session_id is not None:
+                    query["data_after.data.session_id"] = normalized_session_id
+                if exclude_trace_id:
+                    query["artifact_id"] = {"$ne": exclude_trace_id}
+
+                docs = list(
+                    self.audit_middleware.audit_collection.find(query).sort("timestamp", -1).limit(limit)
+                )
+                for doc in docs:
+                    payload = doc.get("data_after")
+                    if isinstance(payload, dict):
+                        matches.append(dict(payload))
+                        if len(matches) >= limit:
+                            break
+        except Exception as exc:
+            self.logger.error("Failed to query recent stage events for %s: %s", stage, exc)
+
+        return matches[:limit]
+
     def get_status(self) -> Dict[str, Any]:
         return {
             "service": "bucket_service",

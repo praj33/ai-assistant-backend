@@ -1,0 +1,53 @@
+{
+  "captured_at": "2026-03-30T07:09:03.804217Z",
+  "case": "correction",
+  "input": {
+    "user_id": "review_signal_user",
+    "context": {
+      "platform": "samachar",
+      "device": "api",
+      "session_id": "review_signal_session"
+    },
+    "event": {
+      "title": "Outbound action correction",
+      "content": "Actually, send the school update by email instead.",
+      "category": "messaging",
+      "confidence": 0.92
+    }
+  },
+  "output": {
+    "status": "ALLOW",
+    "risk_level": "LOW",
+    "reason": "Content passed existing safety validation and enforcement checks.",
+    "confidence": 0.0,
+    "trace_id": "trace_319fed4a847f63f1",
+    "signal_type": "correction",
+    "system_context": {
+      "platform": "samachar",
+      "device": "api",
+      "session_id": "review_signal_session",
+      "user_id": "review_signal_user",
+      "voice_input": false,
+      "preferred_language": "auto",
+      "source": "/api/mitra/evaluate",
+      "category": "messaging",
+      "enforcement_trace_id": "enf_a43509fc7bae0ad2"
+    }
+  },
+  "trace_id": "trace_319fed4a847f63f1",
+  "signal_type": "correction",
+  "signal_log": {
+    "signal_type": "correction",
+    "confidence": 0.93,
+    "trace_id": "trace_319fed4a847f63f1",
+    "session_id": "review_signal_session",
+    "user_id": "review_signal_user",
+    "basis": {
+      "previous_trace_id": "trace_1383be6cc036757a",
+      "similarity": 0.6923,
+      "token_overlap": 6,
+      "previous_category": "messaging",
+      "current_category": "messaging"
+    }
+  }
+}

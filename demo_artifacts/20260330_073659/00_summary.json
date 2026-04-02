@@ -1,0 +1,125 @@
+{
+  "artifacts_dir": "C:\\Users\\Gauri\\Downloads\\integration\\integration\\AI-ASSISTANT-control-plane\\demo_artifacts\\20260330_073659",
+  "cases": {
+    "block": {
+      "confidence": 0.798,
+      "reason": "Detected 1 sexual escalation attempt pattern(s)",
+      "risk_level": "HIGH",
+      "signal_type": "implicit_positive",
+      "status": "BLOCK",
+      "system_context": {
+        "category": "content_request",
+        "device": "api",
+        "enforcement_trace_id": "enf_e8381510adec456d",
+        "platform": "samachar",
+        "preferred_language": "auto",
+        "session_id": "demo_block_session",
+        "source": "/api/mitra/evaluate",
+        "user_id": "demo_block_user",
+        "voice_input": false
+      },
+      "trace_id": "trace_0f739120ceb17bee"
+    },
+    "bypass": {
+      "blocked": true,
+      "bucket_log": {
+        "data": {
+          "reason": "Direct enforcement access blocked. Use Mitra control plane.",
+          "source": null,
+          "trace_id": "trace_demo_direct_bypass"
+        },
+        "integrity_hash": "36f455872f03f531215c4180d420baabd58af418fbb08d7d242b566d560b8d6e",
+        "integrity_version": "sha256-v1",
+        "service": "bucket_service",
+        "stage": "enforcement_bypass_blocked",
+        "timestamp": "2026-03-30T07:37:29.874337",
+        "trace_id": "trace_demo_direct_bypass"
+      },
+      "error": "PermissionError",
+      "message": "Direct enforcement access blocked. Use Mitra control plane.",
+      "trace_id": "trace_demo_direct_bypass"
+    },
+    "clean": {
+      "confidence": 0.0,
+      "reason": "Content passed existing safety validation and enforcement checks.",
+      "risk_level": "LOW",
+      "signal_type": "implicit_positive",
+      "status": "ALLOW",
+      "system_context": {
+        "category": "weather",
+        "device": "api",
+        "enforcement_trace_id": "enf_7193017f999ae1cb",
+        "platform": "samachar",
+        "preferred_language": "auto",
+        "session_id": "demo_clean_session",
+        "source": "/api/mitra/evaluate",
+        "user_id": "demo_clean_user",
+        "voice_input": false
+      },
+      "trace_id": "trace_61247bf46d4d5833"
+    },
+    "correction": {
+      "confidence": 0.0,
+      "reason": "Content passed existing safety validation and enforcement checks.",
+      "risk_level": "LOW",
+      "signal_type": "correction",
+      "status": "ALLOW",
+      "system_context": {
+        "category": "messaging",
+        "device": "api",
+        "enforcement_trace_id": "enf_4722dbf6e3e26062",
+        "platform": "samachar",
+        "preferred_language": "auto",
+        "session_id": "demo_signal_session",
+        "source": "/api/mitra/evaluate",
+        "user_id": "demo_signal_user",
+        "voice_input": false
+      },
+      "trace_id": "trace_36feea6ed688d979"
+    },
+    "flag": {
+      "confidence": 0.6762,
+      "reason": "Detected 2 emotional dependency bait pattern(s)",
+      "risk_level": "MEDIUM",
+      "signal_type": "implicit_positive",
+      "status": "FLAG",
+      "system_context": {
+        "category": "conversation",
+        "device": "api",
+        "enforcement_trace_id": "enf_c00e57166e0860e1",
+        "platform": "samachar",
+        "preferred_language": "auto",
+        "session_id": "demo_flag_session",
+        "source": "/api/mitra/evaluate",
+        "user_id": "demo_flag_user",
+        "voice_input": false
+      },
+      "trace_id": "trace_3b133b969d40ec35"
+    },
+    "refinement": {
+      "confidence": 0.0,
+      "reason": "Content passed existing safety validation and enforcement checks.",
+      "risk_level": "LOW",
+      "signal_type": "intent_refinement",
+      "status": "ALLOW",
+      "system_context": {
+        "category": "weather",
+        "device": "api",
+        "enforcement_trace_id": "enf_c469aa4496f825e4",
+        "platform": "samachar",
+        "preferred_language": "auto",
+        "session_id": "demo_refine_session",
+        "source": "/api/mitra/evaluate",
+        "user_id": "demo_refine_user",
+        "voice_input": false
+      },
+      "trace_id": "trace_9bb29caf64f9f3e1"
+    },
+    "voice": {
+      "processed_at": "2026-03-30T07:37:29.872337",
+      "status": "processed",
+      "trace_id": "trace_31068da81ccf9a30"
+    }
+  },
+  "generated_at": "2026-03-30T07:37:29.875339Z"
+}

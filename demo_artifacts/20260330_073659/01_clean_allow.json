@@ -1,0 +1,36 @@
+{
+  "http_status": 200,
+  "input": {
+    "context": {
+      "device": "api",
+      "platform": "samachar",
+      "session_id": "demo_clean_session"
+    },
+    "event": {
+      "category": "weather",
+      "confidence": 0.93,
+      "content": "Tomorrow will be sunny with light winds.",
+      "title": "Weather update"
+    },
+    "user_id": "demo_clean_user"
+  },
+  "output": {
+    "confidence": 0.0,
+    "reason": "Content passed existing safety validation and enforcement checks.",
+    "risk_level": "LOW",
+    "signal_type": "implicit_positive",
+    "status": "ALLOW",
+    "system_context": {
+      "category": "weather",
+      "device": "api",
+      "enforcement_trace_id": "enf_7193017f999ae1cb",
+      "platform": "samachar",
+      "preferred_language": "auto",
+      "session_id": "demo_clean_session",
+      "source": "/api/mitra/evaluate",
+      "user_id": "demo_clean_user",
+      "voice_input": false
+    },
+    "trace_id": "trace_61247bf46d4d5833"
+  }
+}

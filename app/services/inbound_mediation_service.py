@@ -162,7 +162,6 @@ class InboundMediationService:
             prefix="med",
         )
 
-    @staticmethod
     def is_enabled_for_platform(self, platform: str) -> bool:
         if not self._env_bool("INBOUND_MEDIATION_ENABLED", False):
             return False

@@ -1,78 +1,53 @@
-# Backend Test Results
+# TEST RESULTS
 
-## ✅ All Tests Passed
+Date: 2026-03-30
+Working clone: `C:\Users\Gauri\Downloads\integration\integration\AI-ASSISTANT-control-plane`
+Branch: `mitra-control-plane`
+Frozen demo repo left untouched: `C:\Users\Gauri\Downloads\integration\integration\AI-ASSISTANT-` at `e40948ec6c098920e629a0be1e302e47665d8b97`
 
-### 1. Health Check
-**Endpoint:** `GET /health`
-**Status:** ✅ PASS
-**Response:**
-```json
-{
-  "status": "ok",
-  "version": "3.0.0",
-  "timestamp": "2026-02-27T10:37:42.867988Z"
-}
+Command used:
+
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'; python -m pytest tests/test_mitra_api.py tests/test_mitra_control_plane_integration.py tests/test_enforcement_hardening.py tests/test_generic_response_runtime.py -q
 ```
 
-### 2. Main API Endpoint
-**Endpoint:** `POST /api/assistant`
-**Status:** ✅ PASS
-**Request:**
-```json
-{
-  "version": "3.0.0",
-  "input": {"message": "Hello"},
-  "context": {"platform": "web"}
-}
+Result:
+
+```text
+32 passed
 ```
 
-**Response:**
-```json
-{
-  "version": "3.0.0",
-  "status": "success",
-  "result": {
-    "type": "passive",
-    "response": "Hello! How can I assist you today?",
-    "enforcement": {
-      "decision": "ALLOW",
-      "scope": "both",
-      "trace_id": "trace_23062dc865ef",
-      "reason_code": "CONTENT_ALLOWED"
-    },
-    "safety": {
-      "decision": "allow",
-      "risk_category": "clean",
-      "reason_code": "clean_content",
-      "explanation": "No risky patterns detected"
-    }
-  }
-}
-```
+Scenarios verified:
 
-## Service Integration Status
+| Scenario | Result | Proof |
+| --- | --- | --- |
+| Clean input | `ALLOW` with `LOW` risk, unified contract returned, trace continuity preserved | `trace_1d18ac2061449063` |
+| Rewrite input | `FLAG` with `MEDIUM` risk, existing Akanksha rewrite used, no duplicate safety path | `trace_9908ca81967a0e5d` |
+| Harmful input | `BLOCK` with `HIGH` risk, same request trace preserved through Mitra flow | `trace_fb16cd7ef39c9f86` |
+| Correction flow | RL signal captured as `correction` and written to bucket | `trace_319fed4a847f63f1` |
+| Refinement flow | RL signal captured as `intent_refinement` and written to bucket | `trace_ed4265c57e0c6148` |
+| Repeated usage / abrupt topic change | RL signal captured as `implicit_negative` | verified by `test_mitra_control_plane_marks_abrupt_topic_change_as_implicit_negative` |
+| Voice input | Telephony webhook entered assistant path, then Mitra control plane, with `voice_input: true` in system context | `trace_ef47ca393f29ac0e` |
+| Direct enforcement bypass | Blocked before Raj runtime could be used directly | `trace_review_direct_bypass` |
 
-✅ **Safety Service** - Active & Working
-✅ **Intelligence Service** - Active & Working
-✅ **Enforcement Service** - Active & Working
-✅ **Execution Service** - Active & Working
-✅ **Bucket Service** - Active & Working (MongoDB connected)
-✅ **Orchestration** - Active & Working
+What was verified:
 
-## Trace ID Flow
+- Every public Mitra response now includes `status`, `risk_level`, `reason`, `confidence`, `trace_id`, `signal_type`, and `system_context`.
+- The same request trace is carried through safety, intelligence, enforcement logging, response contract logging, and bucket request logging.
+- Bucket request logs include `user_id`, `input`, `mitra_output`, `trace_id`, and `timestamp`.
+- RL signal capture is deterministic and bucket logged.
+- `/api/assistant` now exposes `trace_id` and `signal_type` for frontend consumption.
+- Voice input reaches Mitra authority before downstream orchestration/execution.
+- Direct `EnforcementService.enforce_policy()` access is blocked unless Mitra opens the internal guard.
 
-✅ Single trace ID propagated: `trace_23062dc865ef`
-- Safety service: ✓
-- Enforcement service: ✓
-- Bucket logging: ✓
+Artifacts produced:
 
-## Ready for Deployment
+- `MITRA_CONTROL_PLANE_LIVE_JSON.json`
+- `MITRA_BUCKET_LOG_PROOF.json`
+- `MITRA_BYPASS_BLOCK_PROOF.json`
+- `REVIEW_PACKET.md`
 
-✅ Backend running on http://localhost:8000
-✅ All services operational
-✅ MongoDB connected
-✅ API authentication working
-✅ Full spine wiring verified
-✅ CI/CD pipeline configured
+Notes:
 
-**Status:** PRODUCTION READY
+- The existing bucket service ran in its real fallback mode because local Mongo was not available in this environment. No new mock logger was introduced.
+- The telephony voice test completed successfully, but reminder task persistence still logs a local Mongo warning when task-save is attempted. The Mitra control-plane trace, logging, and response path still completed successfully.

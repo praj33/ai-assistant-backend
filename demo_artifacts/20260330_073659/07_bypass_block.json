@@ -1,0 +1,19 @@
+{
+  "blocked": true,
+  "bucket_log": {
+    "data": {
+      "reason": "Direct enforcement access blocked. Use Mitra control plane.",
+      "source": null,
+      "trace_id": "trace_demo_direct_bypass"
+    },
+    "integrity_hash": "36f455872f03f531215c4180d420baabd58af418fbb08d7d242b566d560b8d6e",
+    "integrity_version": "sha256-v1",
+    "service": "bucket_service",
+    "stage": "enforcement_bypass_blocked",
+    "timestamp": "2026-03-30T07:37:29.874337",
+    "trace_id": "trace_demo_direct_bypass"
+  },
+  "error": "PermissionError",
+  "message": "Direct enforcement access blocked. Use Mitra control plane.",
+  "trace_id": "trace_demo_direct_bypass"
+}

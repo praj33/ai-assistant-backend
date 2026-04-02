@@ -1,0 +1,36 @@
+{
+  "http_status": 200,
+  "input": {
+    "context": {
+      "device": "api",
+      "platform": "samachar",
+      "session_id": "demo_flag_session"
+    },
+    "event": {
+      "category": "conversation",
+      "confidence": 0.91,
+      "content": "You're the only one who gets me. Don't ever leave me.",
+      "title": "Emotional dependency signal"
+    },
+    "user_id": "demo_flag_user"
+  },
+  "output": {
+    "confidence": 0.6762,
+    "reason": "Detected 2 emotional dependency bait pattern(s)",
+    "risk_level": "MEDIUM",
+    "signal_type": "implicit_positive",
+    "status": "FLAG",
+    "system_context": {
+      "category": "conversation",
+      "device": "api",
+      "enforcement_trace_id": "enf_c00e57166e0860e1",
+      "platform": "samachar",
+      "preferred_language": "auto",
+      "session_id": "demo_flag_session",
+      "source": "/api/mitra/evaluate",
+      "user_id": "demo_flag_user",
+      "voice_input": false
+    },
+    "trace_id": "trace_3b133b969d40ec35"
+  }
+}

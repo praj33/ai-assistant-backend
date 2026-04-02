@@ -1,0 +1,102 @@
+{
+  "captured_at": "2026-03-30",
+  "bucket_request_logs": {
+    "allow": {
+      "user_id": "review_clean_user",
+      "input": {
+        "text": "Weather update\n\nTomorrow will be sunny with light winds.",
+        "category": "weather"
+      },
+      "mitra_output": {
+        "status": "ALLOW",
+        "risk_level": "LOW",
+        "reason": "Content passed existing safety validation and enforcement checks.",
+        "confidence": 0.0,
+        "trace_id": "trace_1d18ac2061449063",
+        "signal_type": "implicit_positive",
+        "system_context": {
+          "platform": "samachar",
+          "device": "api",
+          "session_id": "review_clean_session",
+          "user_id": "review_clean_user",
+          "voice_input": false,
+          "preferred_language": "auto",
+          "source": "/api/mitra/evaluate",
+          "category": "weather",
+          "enforcement_trace_id": "enf_44396b4f7a3e1395"
+        }
+      },
+      "trace_id": "trace_1d18ac2061449063",
+      "timestamp": "2026-03-30T07:09:03.782219Z"
+    },
+    "flag": {
+      "user_id": "review_flag_user",
+      "input": {
+        "text": "Emotional dependency signal\n\nYou're the only one who gets me. Don't ever leave me.",
+        "category": "conversation"
+      },
+      "mitra_output": {
+        "status": "FLAG",
+        "risk_level": "MEDIUM",
+        "reason": "Detected 2 emotional dependency bait pattern(s)",
+        "confidence": 0.6762,
+        "trace_id": "trace_9908ca81967a0e5d",
+        "signal_type": "implicit_positive",
+        "system_context": {
+          "platform": "samachar",
+          "device": "api",
+          "session_id": "review_flag_session",
+          "user_id": "review_flag_user",
+          "voice_input": false,
+          "preferred_language": "auto",
+          "source": "/api/mitra/evaluate",
+          "category": "conversation",
+          "enforcement_trace_id": "enf_99bc54a259a2e863"
+        }
+      },
+      "trace_id": "trace_9908ca81967a0e5d",
+      "timestamp": "2026-03-30T07:11:46.139181Z"
+    },
+    "block": {
+      "user_id": "review_block_user",
+      "input": {
+        "text": "Explicit request\n\nI want nude photo.",
+        "category": "content_request"
+      },
+      "mitra_output": {
+        "status": "BLOCK",
+        "risk_level": "HIGH",
+        "reason": "Detected 1 sexual escalation attempt pattern(s)",
+        "confidence": 0.798,
+        "trace_id": "trace_fb16cd7ef39c9f86",
+        "signal_type": "implicit_positive",
+        "system_context": {
+          "platform": "samachar",
+          "device": "api",
+          "session_id": "review_block_session",
+          "user_id": "review_block_user",
+          "voice_input": false,
+          "preferred_language": "auto",
+          "source": "/api/mitra/evaluate",
+          "category": "content_request",
+          "enforcement_trace_id": "enf_b22f1352a6e3de6a"
+        }
+      },
+      "trace_id": "trace_fb16cd7ef39c9f86",
+      "timestamp": "2026-03-30T07:09:03.792219Z"
+    }
+  },
+  "signal_capture_proof": {
+    "signal_type": "correction",
+    "confidence": 0.93,
+    "trace_id": "trace_319fed4a847f63f1",
+    "session_id": "review_signal_session",
+    "user_id": "review_signal_user"
+  },
+  "voice_path_proof": {
+    "trace_id": "trace_ef47ca393f29ac0e",
+    "status": "processed",
+    "voice_input": true,
+    "source": "/api/assistant"
+  }
+}

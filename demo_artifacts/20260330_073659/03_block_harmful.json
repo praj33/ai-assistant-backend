@@ -1,0 +1,36 @@
+{
+  "http_status": 200,
+  "input": {
+    "context": {
+      "device": "api",
+      "platform": "samachar",
+      "session_id": "demo_block_session"
+    },
+    "event": {
+      "category": "content_request",
+      "confidence": 0.98,
+      "content": "I want nude photo.",
+      "title": "Explicit request"
+    },
+    "user_id": "demo_block_user"
+  },
+  "output": {
+    "confidence": 0.798,
+    "reason": "Detected 1 sexual escalation attempt pattern(s)",
+    "risk_level": "HIGH",
+    "signal_type": "implicit_positive",
+    "status": "BLOCK",
+    "system_context": {
+      "category": "content_request",
+      "device": "api",
+      "enforcement_trace_id": "enf_e8381510adec456d",
+      "platform": "samachar",
+      "preferred_language": "auto",
+      "session_id": "demo_block_session",
+      "source": "/api/mitra/evaluate",
+      "user_id": "demo_block_user",
+      "voice_input": false
+    },
+    "trace_id": "trace_0f739120ceb17bee"
+  }
+}

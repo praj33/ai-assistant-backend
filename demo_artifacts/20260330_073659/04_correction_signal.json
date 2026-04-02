@@ -1,0 +1,36 @@
+{
+  "http_status": 200,
+  "input": {
+    "context": {
+      "device": "api",
+      "platform": "samachar",
+      "session_id": "demo_signal_session"
+    },
+    "event": {
+      "category": "messaging",
+      "confidence": 0.92,
+      "content": "Actually, send the school update by email instead.",
+      "title": "Outbound action correction"
+    },
+    "user_id": "demo_signal_user"
+  },
+  "output": {
+    "confidence": 0.0,
+    "reason": "Content passed existing safety validation and enforcement checks.",
+    "risk_level": "LOW",
+    "signal_type": "correction",
+    "status": "ALLOW",
+    "system_context": {
+      "category": "messaging",
+      "device": "api",
+      "enforcement_trace_id": "enf_4722dbf6e3e26062",
+      "platform": "samachar",
+      "preferred_language": "auto",
+      "session_id": "demo_signal_session",
+      "source": "/api/mitra/evaluate",
+      "user_id": "demo_signal_user",
+      "voice_input": false
+    },
+    "trace_id": "trace_36feea6ed688d979"
+  }
+}

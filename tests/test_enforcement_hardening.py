@@ -1,5 +1,6 @@
 import copy
 
+from app.core.mitra_entry_guard import mitra_enforcement_scope
 from app.external.enforcement.replay_validation import run_replay_validation
 from app.services.bucket_service import BucketService
 from app.services.enforcement_service import EnforcementService
@@ -40,7 +41,8 @@ def _run_enforcement(service: EnforcementService, trace_id: str, text: str, safe
     BucketService.clear_memory_logs()
     bucket = BucketService()
     bucket.log_event(trace_id, "safety_validation", copy.deepcopy(safety))
-    return service.enforce_policy(_enforcement_payload(trace_id, text, safety), trace_id)
+    with mitra_enforcement_scope(trace_id, "test_enforcement_hardening"):
+        return service.enforce_policy(_enforcement_payload(trace_id, text, safety), trace_id)
 
 
 def test_execution_service_blocks_when_verdict_disallows_action(monkeypatch):
@@ -118,10 +120,28 @@ def test_bucket_artifact_integrity_failure_blocks_enforcement():
 
     BucketService._memory_logs[-1]["data"]["decision"] = "tampered"
 
-    result = EnforcementService().enforce_policy(_enforcement_payload(trace_id, "hello", safety), trace_id)
+    with mitra_enforcement_scope(trace_id, "test_enforcement_hardening"):
+        result = EnforcementService().enforce_policy(_enforcement_payload(trace_id, "hello", safety), trace_id)
 
     assert result["decision"] == "BLOCK"
     assert result["reason_code"] == "MISSING_BUCKET_ARTIFACT"
+
+
+def test_direct_enforcement_access_is_blocked_without_mitra_scope():
+    trace_id = "trace_direct_bypass"
+    safety = _safety_payload(trace_id)
+    bucket = BucketService()
+    BucketService.clear_memory_logs()
+    bucket.log_event(trace_id, "safety_validation", copy.deepcopy(safety))
+
+    try:
+        EnforcementService().enforce_policy(_enforcement_payload(trace_id, "hello", safety), trace_id)
+        assert False, "Expected direct enforcement access to be blocked"
+    except PermissionError as exc:
+        assert "Use Mitra control plane" in str(exc)
+
+    bypass_log = BucketService().get_artifact(trace_id, stage="enforcement_bypass_blocked")
+    assert bypass_log is not None
 
 
 def test_execution_service_blocks_allow_when_bucket_artifact_is_tampered(monkeypatch):

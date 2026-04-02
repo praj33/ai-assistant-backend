@@ -56,6 +56,8 @@ class AssistantResult(BaseModel):
     execution: Optional[dict] = None
     language_metadata: Optional[dict] = None
     audio_response: Optional[bytes] = None
+    system_context: Optional[dict] = None
+    mitra: Optional[dict] = None
 
 
 class AssistantSuccessResponse(BaseModel):
@@ -63,6 +65,11 @@ class AssistantSuccessResponse(BaseModel):
     status: Literal["success"]
     result: AssistantResult
     processed_at: str
+    trace_id: Optional[str] = None
+    signal_type: Optional[
+        Literal["correction", "intent_refinement", "implicit_positive", "implicit_negative"]
+    ] = None
+    system_context: Optional[dict] = None
 
 
 class AssistantErrorResponse(BaseModel):
@@ -70,6 +77,11 @@ class AssistantErrorResponse(BaseModel):
     status: Literal["error"]
     error: dict
     processed_at: str
+    trace_id: Optional[str] = None
+    signal_type: Optional[
+        Literal["correction", "intent_refinement", "implicit_positive", "implicit_negative"]
+    ] = None
+    system_context: Optional[dict] = None
 
 
 def _build_authenticated_user_context(
@@ -189,7 +201,7 @@ async def assistant_endpoint(
     Backend is LOCKED and frontend-safe.
     """
     try:
-        request_payload = request.dict()
+        request_payload = request.model_dump()
         authenticated_user_context = _build_authenticated_user_context(
             request_context=request.context,
             x_api_key=x_api_key,
